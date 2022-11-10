@@ -36,7 +36,7 @@ This should point to an empty directory.
 ## secrets.json
 
 In order to securely download data from synapse you will need a personal access token. 
-Generate one by folling the instructions at the links below, 
+Generate one by follwing the instructions at the links below, 
 
 * https://help.synapse.org/docs/Client-Configuration.1985446156.html
 * https://www.synapse.org/#!PersonalAccessTokens
