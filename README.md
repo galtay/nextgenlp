@@ -5,12 +5,11 @@
 # Install `nextgenlp` Python Package 
 
 Create and activate a python environment with your favorite tool. 
-An example for conda that would be compatible with the default python version on the 
-AHA Precision Platform would be, 
+An example for conda would be, 
 
 ```bash
-conda create --name ng37 python=3.7
-conda activate ng37
+conda create --name ng310 python=3.10
+conda activate ng310
 ```
 
 Run the following command in the directory that contains the `setup.cfg` file. 
@@ -23,9 +22,6 @@ pip install -U pip
 ```bash
 pip install -e .
 ```
-
-NOTE: A `requirements.txt` file is included to show one set of package versions that worked on one machine. 
-However, the pip install command above should take care of installing all the requirements for this package.
 
 
 # Setup Data Config
@@ -66,22 +62,26 @@ After you get a confirmation email - you will need to go back the the site, clic
 
 # Downloading from Synapse
 
-Run the `synapse.py` file, 
-
-```bash
-python nextgenlp/synapse.py
+Download datasets using their synids. 
+ 
+```python
+from nextgenlp.synapse import sync_datasets
+synids = ["syn32309524"]  # GENIE v12.0 dataset
+files = sync_datasets(synids)
 ```
 
-check that the path you specified in `DATA_PATH` is populated. 
+By default, the `sync_datasets` function will download synapse datasets 
+to the `DATA_PATH/synapse` directory specified in the `config.ini` file
+(if they are not already there).
+It will also return a list of `synapseclient.entity.File` objects with 
+metadata about the files that were just synced.
 
 
 # Getting Started 
 
-Launch jupyter notebook and checkout the `genie_explore.ipynb` notebook. 
+Create a GENIE dataset object with ... 
 
-```bash
-jupyter notebook
-```
+
 
 
 
