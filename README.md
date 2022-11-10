@@ -42,7 +42,7 @@ Generate one by follwing the instructions at the links below,
 * https://www.synapse.org/#!PersonalAccessTokens
 
 Next, copy `secrets.json.template` to the `SECRETS_PATH` specified in the `config.ini` file. 
-By default `SECRETS_PATH`=`DATA_PATH/secrets.json` but you can change 
+By default `SECRETS_PATH` = `DATA_PATH/secrets.json` but you can change 
 this to whatever you want. Finally, add your personal access token to the `secrets.json` file.  
 
 
