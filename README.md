@@ -41,10 +41,9 @@ Generate one by follwing the instructions at the links below,
 * https://help.synapse.org/docs/Client-Configuration.1985446156.html
 * https://www.synapse.org/#!PersonalAccessTokens
 
-Next, copy `secrets.json.template` to the `SECRETS_PATH`  
-specified in the `config.ini` file. 
+Next, copy `secrets.json.template` to the `SECRETS_PATH` specified in the `config.ini` file. 
 By default `SECRETS_PATH`=`DATA_PATH/secrets.json` but you can change 
-this to whatever you want. Next add your person access token to the `secrets.json` file.  
+this to whatever you want. Finally, add your personal access token to the `secrets.json` file.  
 
 
 # Access to GENIE
