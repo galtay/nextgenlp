@@ -21,7 +21,7 @@ GENOMIC_INFORMATION = "genomic_information"
 
 PATHOLOGY_SCORES = ["Polyphen", "SIFT"]
 
-TOKEN_TYPES = ["mut", "var"]
+TOKEN_TYPES = ["gene", "var"]
 
 SEQ_ASSAY_ID_GROUPS = {
     "DFCI-ONCOPANEL-3.1": ["DFCI-ONCOPANEL-3.1"],
