@@ -30,7 +30,8 @@ pip install -e .
 
 Copy `config.ini.template` to `config.ini` and edit the line that starts with `DATA_PATH`. 
 This should point to an empty directory.
-`nextgenlp` will use this location to store synapse datasets and derived data. 
+`nextgenlp` will use this location to store synapse datasets and derived data.
+ 
 
 ## secrets.json
 
@@ -40,8 +41,10 @@ Generate one by folling the instructions at the links below,
 * https://help.synapse.org/docs/Client-Configuration.1985446156.html
 * https://www.synapse.org/#!PersonalAccessTokens
 
-Next, copy `secrets.json.template` to `DATA_PATH/secrets.json` 
-and edit the new file to contain your personal access token. 
+Next, copy `secrets.json.template` to the `SECRETS_PATH`  
+specified in the `config.ini` file. 
+By default `SECRETS_PATH`=`DATA_PATH/secrets.json` but you can change 
+this to whatever you want. Next add your person access token to the `secrets.json` file.  
 
 
 # Access to GENIE
