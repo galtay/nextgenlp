@@ -81,7 +81,14 @@ metadata about the files that were just synced.
 
 # Getting Started 
 
-Create a GENIE dataset object with ... 
+Create a GENIE dataset object
+
+```python
+from nextgenlp import genie_constants
+from nextgenlp import genie
+syn_file_paths = genie.get_file_name_to_path(genie_version=genie_constants.GENIE_12)
+gd = genie.GenieData.from_file_paths(syn_file_paths)
+``` 
 
 
 
