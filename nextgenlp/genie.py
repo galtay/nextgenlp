@@ -1,3 +1,4 @@
+from copy import deepcopy
 from glob import glob
 import os
 from pathlib import Path
@@ -91,7 +92,6 @@ class GenieData:
 
         logger.info(self.__repr__())
 
-
     @property
     def seq_assay_genes(self):
         return set(self.df_gp_wide.columns)
@@ -117,7 +117,7 @@ class GenieData:
 
     @property
     def sample_ids_with_variants(self):
-        return set(self.df_psm['SAMPLE_ID'].unique())
+        return set(self.df_psm["SAMPLE_ID"].unique())
 
     @classmethod
     def from_file_paths(cls, file_paths, include_cna=False):
@@ -153,51 +153,72 @@ class GenieData:
             "y_col": set(),
             "extra": set(),
         }
-        return cls(
-            df_gp_wide,
-            df_psm,
-            df_dcs,
-            filters,
-            df_cna = df_cna
-        )
-
+        return cls(df_gp_wide, df_psm, df_dcs, filters, df_cna=df_cna)
 
     def subset_to_variants(self):
+        """Return new GenieData with samples that dont have variants removed."""
         logger.info(f"creating subset for samples with variants")
-        df_dcs = self.df_dcs.loc[self.df_psm["SAMPLE_ID"].unique()]
-        self.filters["extra"] = self.filters["extra"] | set(["has_variant"])
+        keep_sample_ids = self.df_psm["SAMPLE_ID"].unique()
+
+        df_dcs = self.df_dcs.loc[keep_sample_ids]
+        logger.info(
+            "dropped {} samples with no variants".format(
+                self.df_dcs.shape[0] - df_dcs.shape[0]
+            )
+        )
+
+        if self.df_cna is not None:
+            df_cna = self.df_cna.loc[keep_sample_ids].copy()
+
+        filters = deepcopy(self.filters)
+        filters["extra"].add("has_variant")
         return GenieData(
             self.df_gp_wide,
             self.df_psm,
             df_dcs,
-            self.filters,
-            df_cna=self.df_cna,
+            filters,
+            df_cna=df_cna,
         )
 
-
     def subset_to_cna(self):
+        """Return new GenieData with samples that dont have CNA data removed."""
         logger.info(f"creating subset for samples with discrete CNA data")
+        if self.df_cna is None:
+            raise ValueError("CNA data was not read so can not create subset")
+
         sample_ids = set(self.df_dcs.index) & set(self.df_cna.index)
         if len(sample_ids) == 0:
-            logger.warning("no sample ID overlap between dcs and discrete CNA data in this subset")
-
+            logger.warning(
+                "no sample ID overlap between dcs and discrete CNA data in this subset"
+            )
+            df_cna = self.df_cna.loc[[],[]]
         df_cna = self.df_cna.loc[list(sample_ids)]
-        bmask = df_cna.isnull().sum() == 0
+
+        # check genes that have full CNA coverage
+        bmask = df_cna.isnull().sum(axis=0) == 0
         cna_genes = list(bmask.index[bmask])
         if len(cna_genes) == 0:
             logger.warning("no genes have full discrete CNA coverage in this subset")
-
+            df_cna = self.df_cna.loc[[],[]]
         df_cna = df_cna[cna_genes]
+
+        # check samples that have full CNA coverage
+        bmask = df_cna.isnull().sum(axis=1) == 0
+        cna_samples = list(bmask.index[bmask])
+        df_cna = df_cna.loc[cna_samples]
+
+
         df_dcs = self.df_dcs.loc[df_cna.index]
-        self.filters["extra"] = self.filters["extra"] | set(["has_cna"])
+        filters = deepcopy(self.filters)
+        filters["extra"].add("has_cna")
+
         return GenieData(
             self.df_gp_wide,
             self.df_psm,
             df_dcs,
-            self.filters,
-            df_cna = self.df_cna,
+            filters,
+            df_cna=df_cna,
         )
-
 
     def subset_from_seq_assay_id_group(self, seq_assay_id_group):
 
@@ -215,13 +236,14 @@ class GenieData:
         df_dcs = df_dcs.loc[df_psm["SAMPLE_ID"].unique()]
         df_gp_wide = self.df_gp_wide.loc[seq_assay_ids, list(seq_assay_genes)].copy()
 
-        self.filters["seq_assay_ids"] = self.filters["seq_assay_ids"] | set(seq_assay_ids)
+        filters = deepcopy(self.filters)
+        filters["seq_assay_ids"] = filters["seq_assay_ids"] | set(seq_assay_ids)
 
         return GenieData(
             df_gp_wide,
             df_psm,
             df_dcs,
-            self.filters,
+            filters,
             df_cna=self.df_cna,
         )
 
@@ -231,26 +253,27 @@ class GenieData:
 
         if path_score == "Polyphen":
             bmask = self.df_psm["Polyphen_Score"].isnull()
-            df_psm = self.df_psm[~bmask]
-            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()]
+            df_psm = self.df_psm[~bmask].copy()
+            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()].copy()
 
         elif path_score == "SIFT":
             bmask = self.df_psm["SIFT_Score"].isnull()
-            df_psm = self.df_psm[~bmask]
-            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()]
+            df_psm = self.df_psm[~bmask].copy()
+            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()].copy()
 
         else:
             raise ValueError(
                 f"path_score must be Polyphen or SIFT, but got {path_score}"
             )
 
-        self.filters["path_score"].add(path_score)
+        filters = deepcopy(self.filters)
+        filters["path_score"].add(path_score)
 
         return GenieData(
             self.df_gp_wide,
             df_psm,
             df_dcs,
-            self.filters,
+            filters,
             df_cna=self.df_cna,
         )
 
@@ -263,71 +286,105 @@ class GenieData:
         df_dcs = self.df_dcs[self.df_dcs[y_col].isin(y_keep)].copy()
         df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_dcs.index)].copy()
 
+        filters = deepcopy(self.filters)
+        filters["y_col"].add((y_col, y_min_count))
+
         return GenieData(
             self.df_gp_wide,
             df_psm,
             df_dcs,
-            self.seq_assay_id_group,
-            self.seq_assay_genes,
-            self.path_score,
+            filters,
             df_cna=self.df_cna,
         )
 
-    def make_sentences(self):
+
+    def get_sent_norm(self, sent_key: str, k: int = 1, p: int = 2) -> pd.Series:
+        """Vector Norms [sum(|c_i,j|^p)]**(k/p)
+
+        k=1,p=2 is L2 norm
+
+        this was the mapper lens used in
+        https://www.pnas.org/doi/10.1073/pnas.1102826108
+
+        """
+        self.df_dcs[sent_key].apply(lambda x: sum([abs(w)**p for t,w in x])**k/p)
+
+
+    def make_sentences(self, reverse_sift=True):
 
         # create variant token
-        self.df_psm["var_token"] = self.df_psm["Hugo_Symbol"] + "<>" + self.df_psm["HGVSp_Short"].fillna("")
+        self.df_psm["var_token"] = (
+            self.df_psm["Hugo_Symbol"] + "<>" + self.df_psm["HGVSp_Short"].fillna("")
+        )
 
         # make sentences
         # first we groupby then we replace NaN with empty list
-        # the NaN will be there for samples with no mutations
+        # the NaN will be there for samples with no variants
         # ==============================================================
-        self.df_dcs["gene_sent"] = self.df_psm.groupby("SAMPLE_ID")[
+        check_cols = ["sent_var", "sent_gene_flat", "sent_var_flat"]
+
+        self.df_dcs["sent_gene"] = self.df_psm.groupby("SAMPLE_ID")[
             "Hugo_Symbol"
         ].apply(list)
-        self.df_dcs["gene_sent"] = self.df_dcs["gene_sent"].fillna("").apply(list)
+        self.df_dcs["sent_gene"] = self.df_dcs["sent_gene"].fillna("").apply(list)
 
-        self.df_dcs["var_sent"] = self.df_psm.groupby("SAMPLE_ID")["var_token"].apply(
+        self.df_dcs["sent_var"] = self.df_psm.groupby("SAMPLE_ID")["var_token"].apply(
             list
         )
-        self.df_dcs["var_sent"] = self.df_dcs["var_sent"].fillna("").apply(list)
+        self.df_dcs["sent_var"] = self.df_dcs["sent_var"].fillna("").apply(list)
 
-        self.df_dcs["gene_sent_flat"] = self.df_dcs["gene_sent"].apply(
+        self.df_dcs["sent_gene_flat"] = self.df_dcs["sent_gene"].apply(
             lambda x: [(el, 1.0) for el in x]
         )
 
-        self.df_dcs["var_sent_flat"] = self.df_dcs["var_sent"].apply(
+        self.df_dcs["sent_var_flat"] = self.df_dcs["sent_var"].apply(
             lambda x: [(el, 1.0) for el in x]
         )
 
-        if self.path_score is not None:
-            if self.path_score == "SIFT":
-                # lower is more pathogenic for SIFT
-                self.df_dcs["score_sent"] = self.df_psm.groupby("SAMPLE_ID")[
-                    f"{self.path_score}_Score"
-                ].apply(lambda x: [1.0 - el for el in list(x)])
-            elif self.path_score == "Polyphen":
-                self.df_dcs["score_sent"] = self.df_psm.groupby("SAMPLE_ID")[
-                    f"{self.path_score}_Score"
-                ].apply(list)
-
-            self.df_dcs["gene_sent_score"] = self.df_dcs.apply(
-                lambda x: list(zip(x["gene_sent"], x["score_sent"])), axis=1
+        if "Polyphen" in self.filters["path_score"]:
+            self.df_dcs["sent_polyphen"] = self.df_psm.groupby("SAMPLE_ID")[
+                "Polyphen_Score"
+            ].apply(list)
+            self.df_dcs["sent_gene_polyphen"] = self.df_dcs.apply(
+                lambda x: list(zip(x["sent_gene"], x["sent_polyphen"])), axis=1
             )
-            self.df_dcs["var_sent_score"] = self.df_dcs.apply(
-                lambda x: list(zip(x["var_sent"], x["score_sent"])), axis=1
+            self.df_dcs["sent_var_polyphen"] = self.df_dcs.apply(
+                lambda x: list(zip(x["sent_var"], x["sent_polyphen"])), axis=1
             )
-
-        check_cols = ["var_sent", "gene_sent_flat", "var_sent_flat"]
-        if self.path_score is not None:
             check_cols = check_cols + [
-                "score_sent",
-                "gene_sent_score",
-                "var_sent_score",
+                "sent_polyphen",
+                "sent_gene_polyphen",
+                "sent_var_polyphen",
             ]
+
+        if "SIFT" in self.filters["path_score"]:
+            self.df_dcs["sent_sift"] = self.df_psm.groupby("SAMPLE_ID")[
+                "SIFT_Score"
+            ].apply(list)
+            if reverse_sift:
+                self.df_dcs["sent_sift"] = self.df_dcs["sent_sift"].apply(
+                    lambda x: [1.0 - el for el in x]
+                )
+            self.df_dcs["sent_gene_sift"] = self.df_dcs.apply(
+                lambda x: list(zip(x["sent_gene"], x["sent_sift"])), axis=1
+            )
+            self.df_dcs["sent_var_sift"] = self.df_dcs.apply(
+                lambda x: list(zip(x["sent_var"], x["sent_sift"])), axis=1
+            )
+            check_cols = check_cols + [
+                "sent_sift",
+                "sent_gene_sift",
+                "sent_var_sift",
+            ]
+
+        if "has_cna" in self.filters["extra"]:
+            self.df_dcs["sent_gene_cna"] = self.df_cna.apply(
+                lambda x: [(gene, cna) for gene, cna in x.items() if cna != 0], axis=1)
+
+
         for col in check_cols:
             assert (
-                self.df_dcs["gene_sent"].apply(len) == self.df_dcs[col].apply(len)
+                self.df_dcs["sent_gene"].apply(len) == self.df_dcs[col].apply(len)
             ).all()
 
     def __str__(self):
@@ -505,22 +562,6 @@ def read_pat_sam_mut(
     return df_psm
 
 
-def get_cna_norms(df_cna: pd.DataFrame, axis: int, k: int = 1, p: int = 2) -> pd.Series:
-    """Vector Norms [sum(|c_i,j|^p)]**(k/p)
-
-    k=1,p=2 is L2 norm
-    axis=0 will do gene vectors
-    axis=1 will do sample vectors
-
-    this was the mapper lens used in
-    https://www.pnas.org/doi/10.1073/pnas.1102826108
-
-    TODO: do better imputation than just setting to 0
-    """
-    ser = (df_cna.fillna(0).abs() ** p).sum(axis=axis) ** (k / p)
-    return ser
-
-
 def get_melted_cna(
     df_cna: pd.DataFrame, drop_nan: bool = True, drop_zero: bool = True
 ) -> pd.DataFrame:
@@ -565,14 +606,6 @@ def dme_to_cravat(df: pd.DataFrame) -> pd.DataFrame:
     df_cravat.loc[bmask, "ALT"] = df["Tumor_Seq_Allele1"]
 
     return df_cravat
-
-
-def get_cna_sentences(df_cna: pd.DataFrame, drop_nan=True, drop_zero=True) -> pd.Series:
-    df_cna_melted = get_melted_cna(df_cna, drop_nan=drop_nan, drop_zero=drop_zero)
-    cna_sentences = df_cna_melted.groupby("SAMPLE_ID").apply(
-        lambda x: list(zip(x["hugo"], x["dcna"]))
-    )
-    return cna_sentences
 
 
 def get_genes_and_samples_from_seq_assay_ids(df_gp_wide, df_dcs, seq_assay_ids):
