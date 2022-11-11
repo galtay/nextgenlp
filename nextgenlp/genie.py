@@ -151,6 +151,7 @@ class GenieData:
             "seq_assay_ids": set(),
             "path_score": set(),
             "y_col": set(),
+            "extra": set(),
         }
         return cls(
             df_gp_wide,
@@ -164,13 +165,12 @@ class GenieData:
     def subset_to_variants(self):
         logger.info(f"creating subset for samples with variants")
         df_dcs = self.df_dcs.loc[self.df_psm["SAMPLE_ID"].unique()]
+        self.filters["extra"] = self.filters["extra"] | set(["has_variant"])
         return GenieData(
             self.df_gp_wide,
             self.df_psm,
             df_dcs,
-            self.seq_assay_id_group,
-            self.seq_assay_genes,
-            self.path_score,
+            self.filters,
             df_cna=self.df_cna,
         )
 
@@ -189,15 +189,13 @@ class GenieData:
 
         df_cna = df_cna[cna_genes]
         df_dcs = self.df_dcs.loc[df_cna.index]
-
+        self.filters["extra"] = self.filters["extra"] | set(["has_cna"])
         return GenieData(
             self.df_gp_wide,
             self.df_psm,
             df_dcs,
-            self.seq_assay_id_group,
-            self.seq_assay_genes,
-            self.path_score,
-            df_cna = df_cna,
+            self.filters,
+            df_cna = self.df_cna,
         )
 
 
