@@ -1,6 +1,9 @@
-# Hack4NF 2022
+# Introduction
 
-* https://hack4nf.bemyapp.com/
+This repo is a place to continue development on ideas that came from participation in [Hack4NF 2022](https://hack4nf-platform.bemyapp.com).
+
+Code developed during the hackathon will remain archived [here](https://github.com/MocoMakers/hack4nf-2022).
+
 
 # Install `nextgenlp` Python Package 
 
