@@ -2,7 +2,7 @@ from copy import deepcopy
 from glob import glob
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from loguru import logger
 import pandas as pd
@@ -75,14 +75,30 @@ def get_file_name_to_path(
 
 
 class GenieData:
+
     def __init__(
         self,
-        df_gp_wide,
-        df_psm,
-        df_dcs,
-        filters,
-        df_cna=None,
+        df_gp_wide: pd.DataFrame,
+        df_psm: pd.DataFrame,
+        df_dcs: pd.DataFrame,
+        filters: Dict[str, set],
+        df_cna: Optional[pd.DataFrame] = None,
+        calc_cna_meta: bool=False,
     ):
+
+        """Class to handle GENIE datasets.
+
+        Args:
+          df_gp_wide: (panels x genes) 1 if panel includes gene, otherwise 0
+          df_psm: merged patient, clinical, mutations data. one row per variant
+          df_dcs: clinical sample data. one row per sample
+          filters: dict indicating which filters have been applied
+          df_cna: (samples x genes) discrete copy number alteration data
+
+        Note:
+          See `from_file_paths` to create an instance from GENIE files.
+          panel == seq_assay_id
+        """
 
         self.df_gp_wide = df_gp_wide
         self.df_psm = df_psm
@@ -90,7 +106,47 @@ class GenieData:
         self.filters = filters
         self.df_cna = df_cna
 
+        if calc_cna_meta:
+            self._calc_cna_metadata()
+
         logger.info(self.__repr__())
+
+    def _calc_cna_metadata(self):
+        logger.info("calculating CNA metadata")
+
+        # get all genes with non-null values for each sample
+        df_cna_melted = get_melted_cna(self.df_cna, drop_zero=False)
+        df_cna_gene_sets = (
+            df_cna_melted.groupby("SAMPLE_ID")["gene"]
+            .apply(frozenset)
+            .to_frame("gene_set")
+        )
+
+        # add the seq_assay_id used for each sample and the number of non-null genes
+        df_cna_gene_sets["SEQ_ASSAY_ID"] = self.df_dcs["SEQ_ASSAY_ID"]
+        df_cna_gene_sets["num_genes"] = df_cna_gene_sets["gene_set"].apply(len)
+
+        # infer which genes have CNA measurements for each panel
+        grpd_num = df_cna_gene_sets.groupby(["SEQ_ASSAY_ID", "num_genes"]).size()
+        grpd_gene = df_cna_gene_sets.groupby(["SEQ_ASSAY_ID", "gene_set"]).size()
+
+        seq_assay_ids_with_cna = (
+            grpd_num.to_frame().reset_index()["SEQ_ASSAY_ID"].unique()
+        )
+
+        seq_assay_id_to_cna_genes = {}
+        for seq_assay_id in self.df_dcs["SEQ_ASSAY_ID"].unique():
+            if seq_assay_id in seq_assay_ids_with_cna:
+                seq_assay_id_to_cna_genes[seq_assay_id] = set(self.df_cna.columns)
+            else:
+                seq_assay_id_to_cna_genes[seq_assay_id] = set()
+
+        for (seq_assay_id, genes), count in grpd_gene.items():
+            seq_assay_id_to_cna_genes[seq_assay_id] = (
+                seq_assay_id_to_cna_genes[seq_assay_id] & genes
+            )
+
+        self.seq_assay_id_to_cna_genes = seq_assay_id_to_cna_genes
 
     @property
     def seq_assay_genes(self):
@@ -120,12 +176,34 @@ class GenieData:
         return set(self.df_psm["SAMPLE_ID"].unique())
 
     @classmethod
-    def from_file_paths(cls, file_paths, include_cna=False):
-        df_gp_wide = read_gene_panels(file_paths["gene_panels"], style="wide")
+    def from_file_paths(
+        cls,
+        gene_panels: str,
+        data_clinical_patient: str,
+        data_clinical_sample: str,
+        data_mutations_extended: str,
+        data_CNA: Optional[str]=None,
+    ):
 
-        df_dcp = read_clinical_patient(file_paths["data_clinical_patient"])
-        df_dcs = read_clinical_sample(file_paths["data_clinical_sample"])
-        df_dme = read_mutations_extended(file_paths["data_mutations_extended"])
+        """Create GenieData instance from GENIE file paths.
+
+        Args:
+          gene_panels: path to directory containing all data_gene_panel_<SEQ_ASSAY_ID>.txt files
+          data_clinical_patient: path to data_clinical_patient.txt file
+          data_clinical_sample: path to data_clinical_sample.txt file
+          data_mutations_extended: path to data_mutations_extended.txt file
+          df_CNA: path to data_CNA.txt file
+
+        """
+
+        df_gp_wide = read_gene_panels(gene_panels, style="wide")
+        df_dcp = read_clinical_patient(data_clinical_patient)
+        df_dcs = read_clinical_sample(data_clinical_sample)
+        df_dme = read_mutations_extended(data_mutations_extended)
+        if data_CNA is None:
+            df_cna = None
+        else:
+            df_cna = read_cna(data_CNA)
 
         logger.info("merging patient, sample, and mutations data")
         # reset index so that "SAMPLE_ID" will be included in final columns
@@ -136,16 +214,7 @@ class GenieData:
             left_on="Tumor_Sample_Barcode",
             right_on="SAMPLE_ID",
         )
-        df_psm = pd.merge(
-            df_psm,
-            df_dcp,
-            on="PATIENT_ID",
-        )
-
-        if include_cna:
-            df_cna = read_cna(file_paths["data_CNA"])
-        else:
-            df_cna = None
+        df_psm = pd.merge(df_psm, df_dcp, on="PATIENT_ID",)
 
         filters = {
             "seq_assay_ids": set(),
@@ -153,10 +222,11 @@ class GenieData:
             "y_col": set(),
             "extra": set(),
         }
-        return cls(df_gp_wide, df_psm, df_dcs, filters, df_cna=df_cna)
+        return cls(df_gp_wide, df_psm, df_dcs, filters, df_cna=df_cna, calc_cna_meta=True)
 
     def subset_to_variants(self):
         """Return new GenieData with samples that dont have variants removed."""
+
         logger.info(f"creating subset for samples with variants")
         keep_sample_ids = self.df_psm["SAMPLE_ID"].unique()
 
@@ -167,15 +237,72 @@ class GenieData:
             )
         )
 
-        if self.df_cna is not None:
-            df_cna = self.df_cna.loc[keep_sample_ids].copy()
+        if self.df_cna is None:
+            df_cna = None
+        else:
+            df_cna = self.df_cna[self.df_cna.index.isin(keep_sample_ids)].copy()
 
         filters = deepcopy(self.filters)
         filters["extra"].add("has_variant")
         return GenieData(
-            self.df_gp_wide,
-            self.df_psm,
-            df_dcs,
+            self.df_gp_wide, self.df_psm, df_dcs.copy(), filters, df_cna=df_cna
+        )
+
+    def subset_from_seq_assay_ids(self, seq_assay_ids):
+        """Filter out samples not tested with seq_assay_ids."""
+
+        logger.info(f"creating subset from seq_assay_ids={seq_assay_ids}")
+
+        # get samples that used these panels and gene set intersection
+        (sample_ids, seq_assay_genes) = get_genes_and_samples_from_seq_assay_ids(
+            self.df_gp_wide, self.df_dcs, seq_assay_ids
+        )
+        # filter out samples using other panels
+        df_dcs = self.df_dcs.loc[list(sample_ids)]
+        # filter out variants found with other panels
+        df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_dcs.index)]
+        # filter out variants outside of gene set intersection
+        df_psm = df_psm[df_psm["Hugo_Symbol"].isin(seq_assay_genes)]
+        # remove samples with no remaining variants
+        df_dcs = df_dcs.loc[df_psm["SAMPLE_ID"].unique()]
+        # update gene panel dataframe
+        df_gp_wide = self.df_gp_wide.loc[seq_assay_ids, list(seq_assay_genes)]
+
+        if self.df_cna is None:
+            df_cna = None
+        else:
+            # intersection between samples from gene panels and CNA samples
+            keep_sample_ids = set(self.df_cna.index) & set(df_dcs.index)
+
+            # intersection of CNA genes from different panels
+            keep_cna_genes = set.intersection(
+                *[
+                    self.seq_assay_id_to_cna_genes[seq_assay_id]
+                    for seq_assay_id in seq_assay_ids
+                ]
+            )
+            # intersection between above and current kept CNA genes
+            keep_cna_genes = list(set(self.df_cna.columns) & keep_cna_genes)
+
+            if len(keep_sample_ids) == 0:
+                logger.warning(f"no samples with CNA data for seq_assay_ids={seq_assay_ids}")
+                df_cna = self.df_cna.loc[[], []].copy()
+
+            elif len(keep_cna_genes) == 0:
+                logger.warning(f"CNA gene intersection is 0 for seq_assay_ids={seq_assay_ids}")
+                df_cna = self.df_cna.loc[[], []].copy()
+
+            else:
+                df_cna = self.df_cna.loc[keep_sample_ids, keep_cna_genes].copy()
+
+
+        filters = deepcopy(self.filters)
+        filters["seq_assay_ids"] = filters["seq_assay_ids"] | set(seq_assay_ids)
+
+        return GenieData(
+            df_gp_wide.copy(),
+            df_psm.copy(),
+            df_dcs.copy(),
             filters,
             df_cna=df_cna,
         )
@@ -191,7 +318,7 @@ class GenieData:
             logger.warning(
                 "no sample ID overlap between dcs and discrete CNA data in this subset"
             )
-            df_cna = self.df_cna.loc[[],[]]
+            df_cna = self.df_cna.loc[[], []]
         df_cna = self.df_cna.loc[list(sample_ids)]
 
         # check genes that have full CNA coverage
@@ -199,7 +326,7 @@ class GenieData:
         cna_genes = list(bmask.index[bmask])
         if len(cna_genes) == 0:
             logger.warning("no genes have full discrete CNA coverage in this subset")
-            df_cna = self.df_cna.loc[[],[]]
+            df_cna = self.df_cna.loc[[], []]
         df_cna = df_cna[cna_genes]
 
         # check samples that have full CNA coverage
@@ -207,44 +334,18 @@ class GenieData:
         cna_samples = list(bmask.index[bmask])
         df_cna = df_cna.loc[cna_samples]
 
-
         df_dcs = self.df_dcs.loc[df_cna.index]
+        df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_cna.index)]
+
         filters = deepcopy(self.filters)
         filters["extra"].add("has_cna")
 
         return GenieData(
             self.df_gp_wide,
-            self.df_psm,
-            df_dcs,
+            df_psm.copy(),
+            df_dcs.copy(),
             filters,
-            df_cna=df_cna,
-        )
-
-    def subset_from_seq_assay_id_group(self, seq_assay_id_group):
-
-        logger.info(f"creating subset for seq_assay_id_group={seq_assay_id_group}")
-        if seq_assay_id_group == "ALL":
-            raise ValueError("use from_file_paths to load ALL")
-
-        seq_assay_ids = genie_constants.SEQ_ASSAY_ID_GROUPS[seq_assay_id_group]
-        (sample_ids, seq_assay_genes) = get_genes_and_samples_from_seq_assay_ids(
-            self.df_gp_wide, self.df_dcs, seq_assay_ids
-        )
-        df_dcs = self.df_dcs.loc[list(sample_ids)].copy()
-        df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_dcs.index)].copy()
-        df_psm = df_psm[df_psm["Hugo_Symbol"].isin(seq_assay_genes)]
-        df_dcs = df_dcs.loc[df_psm["SAMPLE_ID"].unique()]
-        df_gp_wide = self.df_gp_wide.loc[seq_assay_ids, list(seq_assay_genes)].copy()
-
-        filters = deepcopy(self.filters)
-        filters["seq_assay_ids"] = filters["seq_assay_ids"] | set(seq_assay_ids)
-
-        return GenieData(
-            df_gp_wide,
-            df_psm,
-            df_dcs,
-            filters,
-            df_cna=self.df_cna,
+            df_cna=df_cna.copy(),
         )
 
     def subset_from_path_score(self, path_score):
@@ -253,28 +354,33 @@ class GenieData:
 
         if path_score == "Polyphen":
             bmask = self.df_psm["Polyphen_Score"].isnull()
-            df_psm = self.df_psm[~bmask].copy()
-            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()].copy()
+            df_psm = self.df_psm[~bmask]
+            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()]
 
         elif path_score == "SIFT":
             bmask = self.df_psm["SIFT_Score"].isnull()
-            df_psm = self.df_psm[~bmask].copy()
-            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()].copy()
+            df_psm = self.df_psm[~bmask]
+            df_dcs = self.df_dcs.loc[df_psm["SAMPLE_ID"].unique()]
 
         else:
             raise ValueError(
                 f"path_score must be Polyphen or SIFT, but got {path_score}"
             )
 
+        if self.df_cna is None:
+            df_cna = None
+        else:
+            df_cna = self.df_cna[self.df_cna.index.isin(df_dcs.index)].copy()
+
         filters = deepcopy(self.filters)
         filters["path_score"].add(path_score)
 
         return GenieData(
             self.df_gp_wide,
-            df_psm,
-            df_dcs,
+            df_psm.copy(),
+            df_dcs.copy(),
             filters,
-            df_cna=self.df_cna,
+            df_cna=df_cna,
         )
 
     def subset_from_y_col(self, y_col, y_min_count):
@@ -283,20 +389,24 @@ class GenieData:
 
         y_counts = self.df_dcs[y_col].value_counts()
         y_keep = y_counts[y_counts >= y_min_count].index
-        df_dcs = self.df_dcs[self.df_dcs[y_col].isin(y_keep)].copy()
-        df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_dcs.index)].copy()
+        df_dcs = self.df_dcs[self.df_dcs[y_col].isin(y_keep)]
+        df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_dcs.index)]
+
+        if self.df_cna is None:
+            df_cna = None
+        else:
+            df_cna = self.df_cna[self.df_cna.index.isin(df_dcs.index)].copy()
 
         filters = deepcopy(self.filters)
         filters["y_col"].add((y_col, y_min_count))
 
         return GenieData(
             self.df_gp_wide,
-            df_psm,
-            df_dcs,
+            df_psm.copy(),
+            df_dcs.copy(),
             filters,
-            df_cna=self.df_cna,
+            df_cna=df_cna,
         )
-
 
     def get_sent_norm(self, sent_key: str, k: int = 1, p: int = 2) -> pd.Series:
         """Vector Norms [sum(|c_i,j|^p)]**(k/p)
@@ -307,8 +417,7 @@ class GenieData:
         https://www.pnas.org/doi/10.1073/pnas.1102826108
 
         """
-        self.df_dcs[sent_key].apply(lambda x: sum([abs(w)**p for t,w in x])**k/p)
-
+        self.df_dcs[sent_key].apply(lambda x: sum([abs(w) ** p for t, w in x]) ** k / p)
 
     def make_sentences(self, reverse_sift=True):
 
@@ -379,8 +488,8 @@ class GenieData:
 
         if "has_cna" in self.filters["extra"]:
             self.df_dcs["sent_gene_cna"] = self.df_cna.apply(
-                lambda x: [(gene, cna) for gene, cna in x.items() if cna != 0], axis=1)
-
+                lambda x: [(gene, cna) for gene, cna in x.items() if cna != 0], axis=1
+            )
 
         for col in check_cols:
             assert (
@@ -390,7 +499,7 @@ class GenieData:
     def __str__(self):
         return (
             "GenieData("
-            "num_panels={}, "
+            "num_seq_assay_ids={}, "
             "num_seq_assay_genes={}, "
             "num_psm_genes={}, "
             "sample_rows={}, "
@@ -548,16 +657,9 @@ def read_pat_sam_mut(
 
     logger.info("merging patient, sample, and mutations data")
     df_psm = pd.merge(
-        df_dme,
-        df_dcs,
-        left_on="Tumor_Sample_Barcode",
-        right_on="SAMPLE_ID",
+        df_dme, df_dcs, left_on="Tumor_Sample_Barcode", right_on="SAMPLE_ID",
     )
-    df_psm = pd.merge(
-        df_psm,
-        df_dcp,
-        on="PATIENT_ID",
-    )
+    df_psm = pd.merge(df_psm, df_dcp, on="PATIENT_ID",)
 
     return df_psm
 
@@ -573,7 +675,7 @@ def get_melted_cna(
     df = df_cna.copy()
     df["SAMPLE_ID"] = df.index
     df = df.reset_index(drop=True)
-    df_melted = pd.melt(df, id_vars="SAMPLE_ID", var_name="hugo", value_name="dcna")
+    df_melted = pd.melt(df, id_vars="SAMPLE_ID", var_name="gene", value_name="dcna")
     if drop_nan:
         df_melted = df_melted[~df_melted["dcna"].isnull()]
     if drop_zero:
@@ -620,4 +722,8 @@ def get_genes_and_samples_from_seq_assay_ids(df_gp_wide, df_dcs, seq_assay_ids):
         )
         genes = genes & seq_assay_id_genes
         sample_ids.update(seq_assay_id_sample_ids)
+    logger.info(
+        f"filtering samples using gene set intersection from {seq_assay_ids}. "
+        f"found {len(sample_ids)} samples and {len(genes)} genes."
+    )
     return sample_ids, genes
