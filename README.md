@@ -87,7 +87,15 @@ Create a GENIE dataset object
 from nextgenlp import genie_constants
 from nextgenlp import genie
 syn_file_paths = genie.get_file_name_to_path(genie_version=genie_constants.GENIE_12)
-gd = genie.GenieData.from_file_paths(syn_file_paths)
+keep_keys = [
+    "gene_panels",
+    "data_clinical_patient",
+    "data_clinical_sample",
+    "data_mutations_extended",
+    "data_CNA",
+]
+read_file_paths = {k:v for k,v in syn_file_paths.items() if k in keep_keys}
+gd = genie.GenieData.from_file_paths(**read_file_paths)
 ``` 
 
 
