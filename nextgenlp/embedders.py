@@ -124,24 +124,22 @@ def random_int_except(a, b, no):
     return x
 
 
-def calculate_grams(
+def calculate_unigrams(
     sentences: pd.Series,
     min_unigram_weight: int,
     unigram_weighter: Callable[[float], float],
-    skipgram_weighter: Callable[[float, float], float],
-) -> Tuple[Counter, Counter]:
+) -> Counter:
     """Caclulate unigrams and skipgrams from sentences.
 
     Input:
       * sentences: a pd.Series with lists of (unigram, weight) tuples.
       * min_unigram_count: discard unigrams with weights below this
       * unigram_weighter: transform unigram weight in sentence to weight in counter
-      * skipgram_weighter: transform skipgram weights in sentence to weight in counter
 
     """
 
     logger.info(
-        f"calculating unigrams and skipgrams with min_unigram_weight={min_unigram_weight}"
+        f"calculating unigrams with min_unigram_weight={min_unigram_weight}"
     )
 
     all_unigram_weights = Counter()
@@ -155,6 +153,27 @@ def calculate_grams(
         "found {} unique unigrams after filtering by min_unigram_weight={}".format(
             len(unigram_weights), min_unigram_weight
         )
+    )
+
+    return unigram_weights
+
+
+def calculate_skipgrams(
+    sentences: pd.Series,
+    unigram_weights: Counter,
+    skipgram_weighter: Callable[[float, float], float],
+) -> Tuple[Counter, Counter]:
+    """Caclulate unigrams and skipgrams from sentences.
+
+    Input:
+      * sentences: a pd.Series with lists of (unigram, weight) tuples.
+      * unigram_weights: unigram counter, used to filter sentences
+      * skipgram_weighter: transform skipgram weights in sentence to weight in counter
+
+    """
+
+    logger.info(
+        f"calculating skipgrams"
     )
 
     skipgram_weights = Counter()
@@ -192,10 +211,9 @@ def calculate_grams(
                         skipgram_weighter(weight_a, weight_b)
                     )
 
-    logger.info("found {} unique unigrams".format(len(unigram_weights)))
     logger.info("found {} unique skipgrams".format(len(skipgram_weights)))
 
-    return unigram_weights, skipgram_weights
+    return skipgram_weights
 
 
 def create_skipgram_matrix(
@@ -364,10 +382,15 @@ class PpmiEmbeddings:
 
     def create_embeddings(self, sent_col):
 
-        unigram_weights, skipgram_weights = calculate_grams(
+        unigram_weights = calculate_unigrams(
             self.df_dcs[sent_col],
             self.min_unigram_weight,
             self.unigram_weighter,
+        )
+
+        skipgram_weights = calculate_skipgrams(
+            self.df_dcs[sent_col],
+            unigram_weights,
             self.skipgram_weighter,
         )
 
