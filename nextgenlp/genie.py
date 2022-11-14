@@ -307,7 +307,7 @@ class GenieData:
                 df_cna = self.df_cna.loc[[], []].copy()
 
             else:
-                df_cna = self.df_cna.loc[keep_sample_ids, keep_cna_genes].copy()
+                df_cna = self.df_cna.loc[list(keep_sample_ids), list(keep_cna_genes)].copy()
 
         filters = deepcopy(self.filters)
         filters["seq_assay_ids"] = filters["seq_assay_ids"] | set(seq_assay_ids)

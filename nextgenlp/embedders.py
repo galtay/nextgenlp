@@ -82,7 +82,7 @@ class UnigramWeighter:
             raise ValueError("method not recognized")
 
     def __call__(self, weight: float) -> float:
-        return self.call_me(weight + self.shift)
+        return self.call_me(weight) + self.shift
 
 
 
