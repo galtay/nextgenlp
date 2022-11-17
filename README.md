@@ -55,15 +55,9 @@ this to whatever you want. Finally, add your personal access token to the `secre
 
 * https://www.synapse.org/#!Synapse:syn32309524
 
-## GENIE 13.3 (special access request required)
+## GENIE 13.0
 
-* https://www.synapse.org/#!Synapse:syn36709873
-
-Start by requesting access to GENIE dataset 
-
-* https://www.synapse.org/#!Synapse:syn34548529/wiki/618904
-
-After you get a confirmation email - you will need to go back the the site, click "Request Access" and click "Accept" on the electronic terms that pop up. You should then have permission to download the dataset. 
+* link when public
 
 # Downloading from Synapse
 
