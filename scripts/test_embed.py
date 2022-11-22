@@ -112,7 +112,7 @@ for sent_key in sent_keys:
     pipe = Pipeline(
         [
             (
-                "pmi",
+                "vec",
                 embedders.NextgenlpPmiVectorizer(
                     unigram_weighter_method=unigram_weighter_method,
                     unigram_weighter_pre_shift=unigram_weighter_pre_shift,
@@ -145,7 +145,7 @@ for sent_key in sent_keys:
     pipe = Pipeline(
         [
             (
-                "cv",
+                "vec",
                 embedders.NextgenlpCountVectorizer(
                     min_unigram_weight=0,
                     unigram_weighter_method=unigram_weighter_method,
@@ -176,11 +176,8 @@ for sent_key in sent_keys:
 
 
 
-    sys.exit(1)
-
-
 sent_key = "sent_gene_flat"
-xcv = pipes[sent_key].named_steps["cv"].transform(gd.df_dcs[sent_key])
+xcv = pipes[(sent_key, "count")].named_steps["vec"].transform(gd.df_dcs[sent_key])
 vecs = xcv.todense()
 df_vecs = pd.DataFrame(vecs)
 df_vecs.to_csv("vecs.tsv", sep="\t", header=None, index=False)
