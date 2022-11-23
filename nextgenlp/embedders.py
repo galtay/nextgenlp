@@ -3,7 +3,7 @@ import itertools
 import math
 import os
 import random
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
 import numpy as np
@@ -106,27 +106,21 @@ class NextgenlpCountVectorizer(BaseEstimator, TransformerMixin):
         x_stats = self.calc_stats(sentence_weights)
         logger.info(f"fitting on X with sentence weight stats {x_stats}")
 
-        unigram_weights = self.calculate_unigram_weights(X)
-        stop_words = self.calculate_stop_words(unigram_weights)
+        self.unigram_weights = self.calculate_unigram_weights(X)
+        self.stop_words = self.calculate_stop_words()
+        self.filter_unigram_weights()
 
-        u_most_common = unigram_weights.most_common()
+        u_most_common = self.unigram_weights.most_common()
         u_weights = np.array([weight for (unigram, weight) in u_most_common])
         u_stats = self.calc_stats(u_weights)
         logger.info(f"unigram_weights stats {u_stats}")
 
-        unigram_to_index = {
+        self.unigram_to_index = {
             unigram: ii
             for ii, (unigram, _) in enumerate(u_most_common)
-            if unigram not in stop_words
         }
-        index_to_unigram = np.array(
-            [unigram for (unigram, _) in u_most_common if unigram not in stop_words]
-        )
+        self.index_to_unigram = np.array([unigram for (unigram, _) in u_most_common])
 
-        self.unigram_weights = unigram_weights
-        self.stop_words = stop_words
-        self.unigram_to_index = unigram_to_index
-        self.index_to_unigram = index_to_unigram
 
     def transform(self, X, y=None):
         sentence_weights = np.array(
@@ -140,7 +134,7 @@ class NextgenlpCountVectorizer(BaseEstimator, TransformerMixin):
         dat_values = []
         for isamp, sent in enumerate(X):
             for unigram, weight in sent:
-                if unigram in self.stop_words:
+                if unigram not in self.unigram_weights:
                     continue
                 row_indexs.append(isamp)
                 col_indexs.append(self.unigram_to_index[unigram])
@@ -164,10 +158,10 @@ class NextgenlpCountVectorizer(BaseEstimator, TransformerMixin):
         logger.info("found {} unique unigrams".format(len(unigram_weights)))
         return unigram_weights
 
-    def calculate_stop_words(self, unigram_weights: Counter) -> set:
-        """Filter a counter removing values below `min_weight` and values above `max_weight`"""
+    def calculate_stop_words(self) -> set:
+        """Identify unigrams with counter weights below `min_weight` or above `max_weight`"""
         stop_words = set()
-        for unigram, weight in unigram_weights.items():
+        for unigram, weight in self.unigram_weights.items():
             drop_min = (
                 self.min_unigram_weight is not None and weight < self.min_unigram_weight
             )
@@ -185,6 +179,10 @@ class NextgenlpCountVectorizer(BaseEstimator, TransformerMixin):
             )
         )
         return stop_words
+
+    def filter_unigram_weights(self) -> Counter:
+        for unigram in self.stop_words:
+            del self.unigram_weights[unigram]
 
 
 def skipgram_weighter_one(weight_a: float, weight_b: float) -> float:
@@ -290,7 +288,6 @@ class NextgenlpPmiVectorizer(BaseEstimator, TransformerMixin):
         self.svd_matrix = self.calculate_svd_matrix()
 
     def transform(self, X, y=None):
-
         num_samples = X.size
         sample_vecs = np.zeros((num_samples, self.embedding_size))
         for ii, (sample_id, full_sentence) in tqdm(
@@ -299,7 +296,7 @@ class NextgenlpPmiVectorizer(BaseEstimator, TransformerMixin):
             sentence = [
                 (unigram, weight)
                 for (unigram, weight) in full_sentence
-                if unigram not in self.cv.stop_words
+                if unigram in self.cv.unigram_weights
             ]
             sample_vec = np.zeros(self.embedding_size)
             norm = len(sentence) if len(sentence) > 0 else 1
@@ -326,7 +323,7 @@ class NextgenlpPmiVectorizer(BaseEstimator, TransformerMixin):
             sentence = [
                 (unigram, weight)
                 for (unigram, weight) in full_sentence
-                if unigram not in self.cv.stop_words
+                if unigram in self.cv.unigram_weights
             ]
             num_toks = len(sentence)
 

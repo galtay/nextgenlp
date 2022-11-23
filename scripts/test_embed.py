@@ -6,6 +6,7 @@ from nextgenlp import genie
 from nextgenlp import genie_constants
 from nextgenlp import embedders
 
+from loguru import logger
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -17,7 +18,7 @@ from scipy import sparse
 from tqdm import tqdm
 
 
-USE_VARIANTS = False
+USE_VARIANTS = True
 RANDOM_STATE = 9237
 GENIE_VERSION = genie_constants.GENIE_12
 # GENIE_VERSION = genie_constants.GENIE_13
@@ -45,7 +46,7 @@ keep_keys = [
     "data_clinical_patient",
     "data_clinical_sample",
     "data_mutations_extended",
-    #    "data_CNA",
+    "data_CNA",
 ]
 read_file_paths = {k: v for k, v in syn_file_paths.items() if k in keep_keys}
 
@@ -60,10 +61,10 @@ gd = (
     gds["ALL"]
     .subset_to_variants()
     .subset_from_seq_assay_ids(seq_assay_ids)
-    #    .subset_from_path_score("Polyphen")
-    #    .subset_from_path_score("SIFT")
+    .subset_from_path_score("Polyphen")
+    .subset_from_path_score("SIFT")
     .subset_from_y_col(Y_PREDICT, 50)
-    #    .subset_to_cna()
+    .subset_to_cna()
 )
 
 
@@ -71,6 +72,8 @@ gd.make_sentences()
 df_train, df_test = train_test_split(
     gd.df_dcs, stratify=gd.df_dcs[Y_PREDICT], random_state=RANDOM_STATE
 )
+
+
 
 all_sent_keys = [
     "sent_gene_flat",
@@ -83,30 +86,39 @@ all_sent_keys = [
 ]
 sent_keys = [sent_key for sent_key in all_sent_keys if sent_key in gd.df_dcs.columns]
 
+
+
 df_clf_reports = {}
 pipes = {}
 
 for sent_key in sent_keys:
 
+    logger.info(f"using sent_key={sent_key}")
+
     if not USE_VARIANTS:
         if "var" in sent_key:
             continue
 
+    # start with defaults
+    min_unigram_weight = 0.0
+    unigram_weighter_method = "identity"
+    unigram_weighter_pre_shift = 0.0
+    unigram_weighter_post_shift = 0.0
+    skipgram_weighter_method = "norm"
+    skipgram_weighter_pre_shift = 0.0
+    skipgram_weighter_post_shift = 0.0
+
+    # update values as needed
     if sent_key == "sent_gene_cna":
         unigram_weighter_method = "abs"
-        unigram_weighter_pre_shift = 0.0
-        unigram_weighter_post_shift = 0.0
-        skipgram_weighter_method = "norm"
-        skipgram_weighter_pre_shift = 0.0
-        skipgram_weighter_post_shift = 0.0
 
-    else:
-        unigram_weighter_method = "identity"
-        unigram_weighter_pre_shift = 0.0
+    if "sift" in sent_key or "polyphen" in sent_key:
         unigram_weighter_post_shift = 1.0
-        skipgram_weighter_method = "one"
-        skipgram_weighter_pre_shift = 0.0
-        skipgram_weighter_post_shift = 1.0
+        skipgram_weighter_pre_shift = 1.0
+
+    if "var" in sent_key:
+        # TODO: choose an informed threshold
+        min_unigram_weight = 5.0
 
 
     pipe = Pipeline(
@@ -114,6 +126,7 @@ for sent_key in sent_keys:
             (
                 "vec",
                 embedders.NextgenlpPmiVectorizer(
+                    min_unigram_weight = min_unigram_weight,
                     unigram_weighter_method=unigram_weighter_method,
                     unigram_weighter_pre_shift=unigram_weighter_pre_shift,
                     unigram_weighter_post_shift=unigram_weighter_post_shift,
@@ -147,7 +160,7 @@ for sent_key in sent_keys:
             (
                 "vec",
                 embedders.NextgenlpCountVectorizer(
-                    min_unigram_weight=0,
+                    min_unigram_weight = min_unigram_weight,
                     unigram_weighter_method=unigram_weighter_method,
                     unigram_weighter_pre_shift=unigram_weighter_pre_shift,
                     unigram_weighter_post_shift=unigram_weighter_post_shift,
@@ -171,7 +184,7 @@ for sent_key in sent_keys:
         .drop(columns=["accuracy", "macro avg", "weighted avg"])
         .T
     ).sort_values("f1-score")
-    df_clf_reports[sent_key] = df_clf_report
+    df_clf_reports[(sent_key, "count")] = df_clf_report
     pipes[(sent_key, "count")] = pipe
 
 
