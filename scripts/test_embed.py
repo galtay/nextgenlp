@@ -9,9 +9,9 @@ from nextgenlp import embedders
 from loguru import logger
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
+from sklearn.decomposition import TruncatedSVD
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from scipy import sparse
@@ -74,7 +74,6 @@ df_train, df_test = train_test_split(
 )
 
 
-
 all_sent_keys = [
     "sent_gene_flat",
     "sent_gene_sift",
@@ -121,6 +120,84 @@ for sent_key in sent_keys:
         min_unigram_weight = 5.0
 
 
+    # count vectorizer + SVD then logistic regression
+    #======================================================
+    pipe = Pipeline([
+        (
+            "vec",
+            Pipeline([
+                (
+                    "count",
+                    embedders.NextgenlpCountVectorizer(
+                        min_unigram_weight = min_unigram_weight,
+                        unigram_weighter_method=unigram_weighter_method,
+                        unigram_weighter_pre_shift=unigram_weighter_pre_shift,
+                        unigram_weighter_post_shift=unigram_weighter_post_shift,
+                    )
+                ),
+                (
+                    "svd",
+                    TruncatedSVD(n_components=200)
+                ),
+            ]),
+        ),
+        (
+            "clf",
+            LogisticRegression(n_jobs=-1, max_iter=2000),
+        ),
+    ])
+    pipe.fit(df_train[sent_key], df_train[Y_PREDICT])
+    y_pred = pipe.predict(df_test[sent_key])
+    cls_report_dict = classification_report(
+        df_test[Y_PREDICT],
+        y_pred,
+        output_dict=True,
+        zero_division=0,
+    )
+    df_clf_report = (
+        pd.DataFrame(cls_report_dict)
+        .drop(columns=["accuracy", "macro avg", "weighted avg"])
+        .T
+    ).sort_values("f1-score")
+    df_clf_reports[(sent_key, "count-svd")] = df_clf_report
+    pipes[(sent_key, "count-svd")] = pipe
+
+
+    # count vectorizer then logistic regression
+    #======================================================
+    pipe = Pipeline(
+        [
+            (
+                "vec",
+                embedders.NextgenlpCountVectorizer(
+                    min_unigram_weight = min_unigram_weight,
+                    unigram_weighter_method=unigram_weighter_method,
+                    unigram_weighter_pre_shift=unigram_weighter_pre_shift,
+                    unigram_weighter_post_shift=unigram_weighter_post_shift,
+                ),
+            ),
+            ("clf", LogisticRegression(n_jobs=-1, max_iter=2000)),
+        ]
+    )
+    pipe.fit(df_train[sent_key], df_train[Y_PREDICT])
+    y_pred = pipe.predict(df_test[sent_key])
+    cls_report_dict = classification_report(
+        df_test[Y_PREDICT],
+        y_pred,
+        output_dict=True,
+        zero_division=0,
+    )
+    df_clf_report = (
+        pd.DataFrame(cls_report_dict)
+        .drop(columns=["accuracy", "macro avg", "weighted avg"])
+        .T
+    ).sort_values("f1-score")
+    df_clf_reports[(sent_key, "count")] = df_clf_report
+    pipes[(sent_key, "count")] = pipe
+
+
+    # PPMI + SVD  then logistic regression
+    #======================================================
     pipe = Pipeline(
         [
             (
@@ -155,55 +232,28 @@ for sent_key in sent_keys:
     pipes[(sent_key, "pmi")] = pipe
 
 
-    pipe = Pipeline(
-        [
-            (
-                "vec",
-                embedders.NextgenlpCountVectorizer(
-                    min_unigram_weight = min_unigram_weight,
-                    unigram_weighter_method=unigram_weighter_method,
-                    unigram_weighter_pre_shift=unigram_weighter_pre_shift,
-                    unigram_weighter_post_shift=unigram_weighter_post_shift,
-                ),
-            ),
-            ("clf", LogisticRegression(n_jobs=-1, max_iter=2000)),
-        ]
-    )
-    pipe.fit(df_train[sent_key], df_train[Y_PREDICT])
-    y_pred = pipe.predict(df_test[sent_key])
-    pipes[sent_key] = pipe
 
-    cls_report_dict = classification_report(
-        df_test[Y_PREDICT],
-        y_pred,
-        output_dict=True,
-        zero_division=0,
-    )
-    df_clf_report = (
-        pd.DataFrame(cls_report_dict)
-        .drop(columns=["accuracy", "macro avg", "weighted avg"])
-        .T
-    ).sort_values("f1-score")
-    df_clf_reports[(sent_key, "count")] = df_clf_report
-    pipes[(sent_key, "count")] = pipe
+for (sent_key, vec_type), pipe in pipes.items():
 
+    tag = f"{sent_key}_{vec_type}"
+    xcv = pipe.named_steps["vec"].transform(gd.df_dcs[sent_key])
+    if type(xcv) == np.matrix or type(xcv) == np.ndarray:
+        vecs = xcv
+    else:
+        vecs = xcv.todense()
+    df_vecs = pd.DataFrame(vecs)
+    df_vecs.to_csv(f"{tag}_vecs.tsv", sep="\t", header=None, index=False)
 
-
-sent_key = "sent_gene_flat"
-xcv = pipes[(sent_key, "count")].named_steps["vec"].transform(gd.df_dcs[sent_key])
-vecs = xcv.todense()
-df_vecs = pd.DataFrame(vecs)
-df_vecs.to_csv("vecs.tsv", sep="\t", header=None, index=False)
-
-meta_cols = [
-    "SAMPLE_ID",
-    "SEQ_ASSAY_ID",
-    "CANCER_TYPE",
-    "CANCER_TYPE_DETAILED",
-    "CENTER",
-    "SAMPLE_TYPE",
-    "SAMPLE_TYPE_DETAILED",
-    "sent_var",
-]
-df_meta = gd.df_dcs.reset_index()[meta_cols]
-df_meta.to_csv("meta.tsv", sep="\t", index=False)
+    meta_cols = [
+        "SAMPLE_ID",
+        "SEQ_ASSAY_ID",
+        "CANCER_TYPE",
+        "CANCER_TYPE_DETAILED",
+        "CENTER",
+        "SAMPLE_TYPE",
+        "SAMPLE_TYPE_DETAILED",
+        "sent_var",
+        "sent_gene_cna",
+    ]
+    df_meta = gd.df_dcs.reset_index()[meta_cols]
+    df_meta.to_csv(f"{tag}_meta.tsv", sep="\t", index=False)
