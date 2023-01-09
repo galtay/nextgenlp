@@ -5,17 +5,17 @@ This repo is a place to continue development on ideas that came from participati
 Code developed during the hackathon will remain archived [here](https://github.com/MocoMakers/hack4nf-2022).
 
 
-# Install `nextgenlp` Python Package 
+# Install `nextgenlp` Python Package
 
-Create and activate a python environment with your favorite tool. 
-An example for conda would be, 
+Create and activate a python environment with your favorite tool.
+An example for conda would be,
 
 ```bash
 conda create --name ng310 python=3.10
 conda activate ng310
 ```
 
-Run the following command in the directory that contains the `setup.cfg` file. 
+Run the following command in the directory that contains the `setup.cfg` file.
 You might have to update to the latest version of pip
 
 ```bash
@@ -29,73 +29,71 @@ pip install -e .
 
 # Setup Data Config
 
-## config.ini 
+## config.ini
 
-Copy `config.ini.template` to `config.ini` and edit the line that starts with `DATA_PATH`. 
+Copy `config.ini.template` to `config.ini` and edit the line that starts with `DATA_PATH`.
 This should point to an empty directory.
 `nextgenlp` will use this location to store synapse datasets and derived data.
- 
+
 
 ## secrets.json
 
-In order to securely download data from synapse you will need a personal access token. 
-Generate one by follwing the instructions at the links below, 
+In order to securely download data from synapse you will need a personal access token.
+Generate one by follwing the instructions at the links below,
 
 * https://help.synapse.org/docs/Client-Configuration.1985446156.html
 * https://www.synapse.org/#!PersonalAccessTokens
 
-Next, copy `secrets.json.template` to the `SECRETS_PATH` specified in the `config.ini` file. 
-By default `SECRETS_PATH` = `DATA_PATH/secrets.json` but you can change 
-this to whatever you want. Finally, add your personal access token to the `secrets.json` file.  
+Next, copy `secrets.json.template` to the `SECRETS_PATH` specified in the `config.ini` file.
+By default `SECRETS_PATH` = `DATA_PATH/secrets.json` but you can change
+this to whatever you want. Finally, add your personal access token to the `secrets.json` file.
 
 
 # Access to GENIE
 
-## GENIE 12.0
+## GENIE 12
 
 * https://www.synapse.org/#!Synapse:syn32309524
 
-## GENIE 13.0
+## GENIE 13
 
 * link when public
 
 # Downloading from Synapse
 
-Download datasets using their synids. 
- 
+Download datasets using their synids.
+
 ```python
 from nextgenlp.synapse import sync_datasets
-synids = ["syn32309524"]  # GENIE v12.0 dataset
+synids = ["syn32309524"]  # GENIE v12 dataset
 files = sync_datasets(synids)
 ```
 
-By default, the `sync_datasets` function will download synapse datasets 
+By default, the `sync_datasets` function will download synapse datasets
 to the `DATA_PATH/synapse` directory specified in the `config.ini` file
 (if they are not already there).
-It will also return a list of `synapseclient.entity.File` objects with 
+It will also return a list of `synapseclient.entity.File` objects with
 metadata about the files that were just synced.
 
 
-# Getting Started 
+# Getting Started
 
-Create a GENIE dataset object
+Create a GENIE 12 dataset object
 
 ```python
-from nextgenlp import genie_constants
-from nextgenlp import genie
-syn_file_paths = genie.get_file_name_to_path(genie_version=genie_constants.GENIE_12)
-keep_keys = [
-    "gene_panels",
-    "data_clinical_patient",
-    "data_clinical_sample",
-    "data_mutations_extended",
-    "data_CNA",
-]
-read_file_paths = {k:v for k,v in syn_file_paths.items() if k in keep_keys}
-gd = genie.GenieData.from_file_paths(**read_file_paths)
-``` 
+# you will have to update this
+syn_base_path = "/path/to/syn32309524"
 
-
-
-
-
+gene_panels = os.path.join(syn_base_path, "gene_panels")
+data_clinical_patient = os.path.join(syn_base_path, "data_clinical_patient.txt")
+data_clinical_sample = os.path.join(syn_base_path, "data_clinical_sample.txt")
+data_mutations_extended = os.path.join(syn_base_path, "data_mutations_extended.txt")
+data_CNA = os.path.join(syn_base_path, "data_CNA.txt")
+gd = genie.GenieData.from_file_paths(
+    gene_panels,
+    data_clinical_patient,
+    data_clinical_sample,
+    data_mutations_extended,
+    data_CNA,
+)
+```

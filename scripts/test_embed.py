@@ -1,14 +1,12 @@
 """
-Simple example of creating GenieData subsets.
+Run embedders and classifiers
 """
-
-from nextgenlp import genie
-from nextgenlp import genie_constants
-from nextgenlp import embedders
+import os
 
 from loguru import logger
 import numpy as np
 import pandas as pd
+import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
@@ -17,37 +15,33 @@ from sklearn.metrics import classification_report
 from scipy import sparse
 from tqdm import tqdm
 
+from nextgenlp.config import config
+from nextgenlp import genie
+from nextgenlp import genie_constants
+from nextgenlp.count_vectorizer import NextgenlpCountVectorizer
+from nextgenlp.pmi_vectorizer import NextgenlpPmiVectorizer
 
+
+USE_PATH_SCORES = True
 USE_VARIANTS = True
+USE_CNA = True
 RANDOM_STATE = 9237
 GENIE_VERSION = genie_constants.GENIE_12
-# GENIE_VERSION = genie_constants.GENIE_13
+EMBEDDINGS_PATH = config['Paths']["embeddings_path"]
 
 
-
-def get_clf_feature_importance(clf, class_name, feature_names, nmax=10):
-    class_index = np.where(clf.classes_ == class_name)[0][0]
-    coefs = clf.coef_[class_index, :]
-    sindxs = np.argsort(coefs)[::-1]
-    results = []
-    for ii in range(nmax):
-        results.append(
-            (
-                feature_names[sindxs[ii]],
-                coefs[sindxs[ii]],
-            )
-        )
-    return results
-
-
-syn_file_paths = genie.get_file_name_to_path(genie_version=GENIE_VERSION)
+syn_file_paths = genie_constants.get_file_name_to_path(
+    sync_path=config["Paths"]["synapse_path"],
+    genie_version=GENIE_VERSION,
+)
 keep_keys = [
     "gene_panels",
     "data_clinical_patient",
     "data_clinical_sample",
     "data_mutations_extended",
-    "data_CNA",
 ]
+if USE_CNA:
+    keep_keys += ["data_CNA"]
 read_file_paths = {k: v for k, v in syn_file_paths.items() if k in keep_keys}
 
 gds = {}
@@ -55,36 +49,28 @@ gds["ALL"] = genie.GenieData.from_file_paths(**read_file_paths)
 
 # create specific subset
 Y_PREDICT = "CANCER_TYPE"
-# seq_assay_ids = genie_constants.SEQ_ASSAY_ID_GROUPS["MSK-IMPACT468"]
-seq_assay_ids = genie_constants.SEQ_ASSAY_ID_GROUPS["MSK-NOHEME"]
-gd = (
+seq_assay_ids = genie_constants.SEQ_ASSAY_ID_GROUPS["MSK-IMPACT468"]
+# seq_assay_ids = genie_constants.SEQ_ASSAY_ID_GROUPS["MSK-NOHEME"]
+
+gds["BASE"] = (
     gds["ALL"]
     .subset_to_variants()
     .subset_from_seq_assay_ids(seq_assay_ids)
-    .subset_from_path_score("Polyphen")
-    .subset_from_path_score("SIFT")
     .subset_from_y_col(Y_PREDICT, 50)
-    .subset_to_cna()
 )
 
 
-gd.make_sentences()
-df_train, df_test = train_test_split(
-    gd.df_dcs, stratify=gd.df_dcs[Y_PREDICT], random_state=RANDOM_STATE
-)
-
-
-all_sent_keys = [
+sent_keys = [
     "sent_gene_flat",
-    "sent_gene_sift",
-    "sent_gene_polyphen",
-    "sent_var_flat",
-    "sent_var_sift",
-    "sent_var_polyphen",
-    "sent_gene_cna",
 ]
-sent_keys = [sent_key for sent_key in all_sent_keys if sent_key in gd.df_dcs.columns]
-
+if USE_VARIANTS:
+    sent_keys += ["sent_var_flat"]
+if USE_PATH_SCORES:
+    sent_keys += ["sent_gene_sift", "sent_gene_polyphen"]
+if USE_PATH_SCORES and USE_VARIANTS:
+    sent_keys += ["sent_var_sift", "sent_var_polyphen"]
+if USE_CNA:
+    sent_keys += ["sent_gene_cna"]
 
 
 df_clf_reports = {}
@@ -93,13 +79,25 @@ pipes = {}
 for sent_key in sent_keys:
 
     logger.info(f"using sent_key={sent_key}")
+    gd = gds["BASE"]
 
-    if not USE_VARIANTS:
-        if "var" in sent_key:
-            continue
+    if "sift" in sent_key:
+        gd = gd.subset_from_path_score("SIFT")
+
+    if "polyphen" in sent_key:
+        gd = gd.subset_from_path_score("Polyphen")
+
+    if "cna" in sent_key:
+        gd = gd.subset_to_cna()
+
+    gd.make_sentences()
+    df_train, df_test = train_test_split(
+        gd.df_dcs, stratify=gd.df_dcs[Y_PREDICT], random_state=RANDOM_STATE
+    )
+
 
     # start with defaults
-    min_unigram_weight = 0.0
+    min_df = 0.0
     unigram_weighter_method = "identity"
     unigram_weighter_pre_shift = 0.0
     unigram_weighter_post_shift = 0.0
@@ -117,7 +115,7 @@ for sent_key in sent_keys:
 
     if "var" in sent_key:
         # TODO: choose an informed threshold
-        min_unigram_weight = 5.0
+        min_df = 2
 
 
     # count vectorizer + SVD then logistic regression
@@ -128,8 +126,8 @@ for sent_key in sent_keys:
             Pipeline([
                 (
                     "count",
-                    embedders.NextgenlpCountVectorizer(
-                        min_unigram_weight = min_unigram_weight,
+                    NextgenlpCountVectorizer(
+                        min_df = min_df,
                         unigram_weighter_method=unigram_weighter_method,
                         unigram_weighter_pre_shift=unigram_weighter_pre_shift,
                         unigram_weighter_post_shift=unigram_weighter_post_shift,
@@ -169,8 +167,8 @@ for sent_key in sent_keys:
         [
             (
                 "vec",
-                embedders.NextgenlpCountVectorizer(
-                    min_unigram_weight = min_unigram_weight,
+                NextgenlpCountVectorizer(
+                    min_df = min_df,
                     unigram_weighter_method=unigram_weighter_method,
                     unigram_weighter_pre_shift=unigram_weighter_pre_shift,
                     unigram_weighter_post_shift=unigram_weighter_post_shift,
@@ -202,8 +200,8 @@ for sent_key in sent_keys:
         [
             (
                 "vec",
-                embedders.NextgenlpPmiVectorizer(
-                    min_unigram_weight = min_unigram_weight,
+                NextgenlpPmiVectorizer(
+                    min_df = min_df,
                     unigram_weighter_method=unigram_weighter_method,
                     unigram_weighter_pre_shift=unigram_weighter_pre_shift,
                     unigram_weighter_post_shift=unigram_weighter_post_shift,
@@ -232,28 +230,81 @@ for sent_key in sent_keys:
     pipes[(sent_key, "pmi")] = pipe
 
 
+    # write out vectors on full dataset
+    #======================================================
+    for vec_type in ["count", "count-svd", "pmi"]:
 
-for (sent_key, vec_type), pipe in pipes.items():
+        tag = f"{sent_key}_{vec_type}"
+        out_path = os.path.join(EMBEDDINGS_PATH, tag)
+        os.makedirs(out_path, exist_ok=True)
 
-    tag = f"{sent_key}_{vec_type}"
-    xcv = pipe.named_steps["vec"].transform(gd.df_dcs[sent_key])
-    if type(xcv) == np.matrix or type(xcv) == np.ndarray:
-        vecs = xcv
-    else:
-        vecs = xcv.todense()
-    df_vecs = pd.DataFrame(vecs)
-    df_vecs.to_csv(f"{tag}_vecs.tsv", sep="\t", header=None, index=False)
+        pipe = sklearn.base.clone(pipes[(sent_key, vec_type)])
+        xcv = pipe.named_steps["vec"].fit_transform(gd.df_dcs[sent_key])
+        if type(xcv) == np.matrix or type(xcv) == np.ndarray:
+            vecs = xcv
+        else:
+            vecs = xcv.todense()
+        df_vecs = pd.DataFrame(vecs)
+        df_vecs.to_csv(
+            os.path.join(out_path, f"{tag}_vecs.tsv"),
+            sep="\t",
+            header=None,
+            index=False,
+        )
 
-    meta_cols = [
-        "SAMPLE_ID",
-        "SEQ_ASSAY_ID",
-        "CANCER_TYPE",
-        "CANCER_TYPE_DETAILED",
-        "CENTER",
-        "SAMPLE_TYPE",
-        "SAMPLE_TYPE_DETAILED",
-        "sent_var",
-        "sent_gene_cna",
-    ]
-    df_meta = gd.df_dcs.reset_index()[meta_cols]
-    df_meta.to_csv(f"{tag}_meta.tsv", sep="\t", index=False)
+        df_dcs = gd.df_dcs.reset_index().copy()
+        meta_cols = [
+            "SAMPLE_ID",
+            "PATIENT_ID",
+            "SEQ_ASSAY_ID",
+            "ONCOTREE_CODE",
+            "CANCER_TYPE",
+            "CANCER_TYPE_DETAILED",
+            "CENTER",
+            "SAMPLE_TYPE",
+            "SAMPLE_TYPE_DETAILED",
+            "sent_var",
+        ]
+        if "sent_gene_cna" in df_dcs.columns:
+            meta_cols += ["sent_gene_cna"]
+
+        df_meta = df_dcs[meta_cols].copy()
+
+        HUGO_CODES = ["NF1", "NF2", "SMARCB1", "LZTR1"]
+        for hugo in HUGO_CODES:
+            df_meta[f"flag_{hugo}"] = (
+                df_dcs["sent_gene"].apply(lambda x: hugo in x).astype(int)
+            )
+
+        ONCOTREE_CODES = ["NST", "MPNST", "NFIB", "SCHW", "CSCHW", "MSCHW"]
+        for oncotree in ONCOTREE_CODES:
+            df_meta[f"flag_{oncotree}"] = (df_dcs["ONCOTREE_CODE"] == oncotree).astype(
+                int
+            )
+
+        df_meta.to_csv(
+            os.path.join(out_path, f"{tag}_meta.tsv"),
+            sep="\t",
+            index=False,
+        )
+
+
+def get_clf_feature_importance(clf, class_name, feature_names, nmax=10):
+    class_index = np.where(clf.classes_ == class_name)[0][0]
+    coefs = clf.coef_[class_index, :]
+    sindxs = np.argsort(coefs)[::-1]
+    results = []
+    for ii in range(nmax):
+        results.append(
+            (
+                feature_names[sindxs[ii]],
+                coefs[sindxs[ii]],
+            )
+        )
+    return results
+
+
+clf = pipes[('sent_gene_flat', 'count')].named_steps['clf']
+class_name = 'Gastrointestinal Stromal Tumor'
+feature_names = pipes[('sent_gene_flat', 'count')].named_steps['vec'].index_to_unigram
+fi = get_clf_feature_importance(clf, class_name, feature_names)

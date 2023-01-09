@@ -1,5 +1,10 @@
-GENIE_12 = "genie-12.0-public"
-GENIE_13 = "genie-13.3-consortium"
+from pathlib import Path
+from typing import Dict
+from loguru import logger
+
+
+GENIE_12 = "genie-12"
+GENIE_13 = "genie-13"
 VALID_GENIE_VERSIONS = [GENIE_12, GENIE_13]
 
 DATASET_NAME_TO_SYNID = {
@@ -155,3 +160,66 @@ SEQ_ASSAY_ID_GROUPS = {
         "YALE-OCP-V3",
     ],
 }
+
+
+def get_file_name_to_path(
+    sync_path: str,
+    genie_version: str,
+) -> Dict[str, Path]:
+
+    """Return the paths to files in a GENIE dataset."""
+
+    genie_path = Path(sync_path) / DATASET_NAME_TO_SYNID[genie_version]
+    logger.info(f"genie_path={genie_path}")
+
+    if genie_version == GENIE_12:
+        file_name_to_path = {
+            ASSAY_INFORMATION: genie_path
+            / f"{ASSAY_INFORMATION}.txt",
+            DATA_CLINICAL_PATIENT: genie_path
+            / f"{DATA_CLINICAL_PATIENT}.txt",
+            DATA_CLINICAL_SAMPLE: genie_path
+            / f"{DATA_CLINICAL_SAMPLE}.txt",
+            DATA_FUSIONS: genie_path
+            / f"{DATA_FUSIONS}.txt",
+            DATA_GENE_MATRIX: genie_path
+            / f"{DATA_GENE_MATRIX}.txt",
+            DATA_MUTATIONS_EXTENDED: genie_path
+            / f"{DATA_MUTATIONS_EXTENDED}.txt",
+            DATA_CNA: genie_path / f"{DATA_CNA}.txt",
+            DATA_CNA_HG19_SEG: genie_path
+            / f"genie_{DATA_CNA_HG19_SEG}.seg",
+            GENE_PANELS: genie_path / GENE_PANELS,
+            GENOMIC_INFORMATION: genie_path
+            / f"{GENOMIC_INFORMATION}.txt",
+        }
+
+    elif genie_version == GENIE_13:
+        file_name_to_path = {
+            ASSAY_INFORMATION: genie_path
+            / f"{ASSAY_INFORMATION}_13.3-consortium.txt",
+            DATA_CLINICAL_PATIENT: genie_path
+            / f"{DATA_CLINICAL_PATIENT}_13.3-consortium.txt",
+            DATA_CLINICAL_SAMPLE: genie_path
+            / f"{DATA_CLINICAL_SAMPLE}_13.3-consortium.txt",
+            DATA_FUSIONS: genie_path
+            / f"{DATA_FUSIONS}_13.3-consortium.txt",
+            DATA_GENE_MATRIX: genie_path
+            / f"{DATA_GENE_MATRIX}_13.3-consortium.txt",
+            DATA_MUTATIONS_EXTENDED: genie_path
+            / f"{DATA_MUTATIONS_EXTENDED}_13.3-consortium.txt",
+            DATA_CNA: genie_path
+            / f"{DATA_CNA}_13.3-consortium.txt",
+            DATA_CNA_HG19_SEG: genie_path
+            / f"genie_private_{DATA_CNA_HG19_SEG}_13.3-consortium.seg",
+            GENE_PANELS: genie_path / GENE_PANELS,
+            GENOMIC_INFORMATION: genie_path
+            / f"{GENOMIC_INFORMATION}_13.3-consortium.txt",
+        }
+
+    else:
+        raise ValueError(
+            f"genie version must be one of {VALID_GENIE_VERSIONS}"
+        )
+
+    return file_name_to_path

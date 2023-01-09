@@ -3,12 +3,17 @@ Simple example of creating a GenieData object.
 """
 from nextgenlp import genie
 from nextgenlp import genie_constants
+from nextgenlp.config import config
 
 
 GENIE_VERSION = genie_constants.GENIE_12
-#GENIE_VERSION = genie_constants.GENIE_13
 
-syn_file_paths = genie.get_file_name_to_path(genie_version=GENIE_VERSION)
+
+syn_file_paths = genie_constants.get_file_name_to_path(
+    sync_path=config["Paths"]["synapse_path"],
+    genie_version=GENIE_VERSION,
+)
+
 keep_keys = [
     "gene_panels",
     "data_clinical_patient",
