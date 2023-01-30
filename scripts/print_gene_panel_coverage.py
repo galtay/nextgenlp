@@ -1,15 +1,16 @@
 import json
 import pandas as pd
 
-from nextgenlp import synapse
+from nextgenlp.config import config
 from nextgenlp import genie
 from nextgenlp import genie_constants
 
 
-GENIE_VERSION = "genie-12.0-public"
-#GENIE_VERSION = "genie-13.3-consortium"
-
-syn_file_paths = genie.get_file_name_to_path(genie_version=GENIE_VERSION)
+GENIE_VERSION = genie_constants.GENIE_12
+syn_file_paths = genie_constants.get_file_name_to_path(
+    sync_path=config["Paths"]["synapse_path"],
+    genie_version=GENIE_VERSION,
+)
 keep_keys = [
     "gene_panels",
     "data_clinical_patient",

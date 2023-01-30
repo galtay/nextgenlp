@@ -15,10 +15,18 @@ from tqdm import tqdm
 from nextgenlp.count_vectorizer import NextgenlpCountVectorizer
 from nextgenlp.count_vectorizer import UnigramWeighter
 
-# type aliase for sentences. for example,
+
+# type alias for sentences.
+# for pathogenicity scores this could be,
 # [
 #   [(HER2, 1.0), (MSK, 0.5), ...],
 #   [(GATA2, 0.2), ... ]
+# ]
+#
+# for copy number alterations this could be,
+# [
+#   [(HER2, -2), (MSK, 0), ...],
+#   [(GATA2, 1), ... ]
 # ]
 Sentences = Iterable[Iterable[tuple[str, float]]]
 

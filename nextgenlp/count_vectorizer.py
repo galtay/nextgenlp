@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import Callable, Dict, Iterable
+from typing import Callable, Dict, Iterable, Union
 
 from loguru import logger
 import numpy as np
@@ -10,12 +10,19 @@ from sklearn.base import TransformerMixin
 from tqdm import tqdm
 
 
-# type aliase for sentences. for example,
+# type alias for sentences.
+# for pathogenicity scores this could be,
 # [
 #   [(HER2, 1.0), (MSK, 0.5), ...],
 #   [(GATA2, 0.2), ... ]
 # ]
-Sentences = Iterable[Iterable[tuple[str, float]]]
+#
+# for copy number alterations this could be,
+# [
+#   [(HER2, -2), (MSK, 0), ...],
+#   [(GATA2, 1), ... ]
+# ]
+Sentences = Iterable[Iterable[tuple[str, Union[int, float]]]]
 
 
 def unigram_weighter_one(weight: float) -> float:
@@ -62,7 +69,8 @@ class NextgenlpCountVectorizer(BaseEstimator, TransformerMixin):
         * min_df: unigrams with document frequency below this are dropped
         * max_df: unigrams with document frequency above this are dropped
         * unigram_weighter_method: method to transform sentence weight to counter weight
-        * unigram_weighter_shift: global shift to add to unigram weighter
+        * unigram_weighter_pre_shift: (see UnigramWeighter)
+        * unigram_weighter_post_shift: (see UnigramWeighter)
         """
         self.min_df = min_df
         self.max_df = max_df

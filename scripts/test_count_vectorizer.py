@@ -57,7 +57,7 @@ df_train, df_test = train_test_split(
 
 
 def get_count_vectorizer(**cv_kwargs):
-    """Get a count vectorizer appropriate for pre-tokenized text"""
+    """Get an sklearn count vectorizer appropriate for pre-tokenized text"""
     return CountVectorizer(
         tokenizer=lambda x: x, preprocessor=lambda x: x, token_pattern=None, **cv_kwargs
     )
