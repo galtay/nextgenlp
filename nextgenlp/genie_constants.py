@@ -160,17 +160,6 @@ def get_file_name_to_path(
     genie_path = Path(sync_path) / DATASET_NAME_TO_SYNID[genie_version]
     logger.info(f"genie_path={genie_path}")
 
-    ASSAY_INFORMATION = "assay_information"
-    DATA_CLINICAL_PATIENT = "data_clinical_patient"
-    DATA_CLINICAL_SAMPLE = "data_clinical_sample"
-    DATA_FUSIONS = "data_fusions"
-    DATA_GENE_MATRIX = "data_gene_matrix"
-    DATA_MUTATIONS_EXTENDED = "data_mutations_extended"
-    DATA_CNA = "data_CNA"
-    DATA_CNA_HG19_SEG = "data_cna_hg19"
-    GENE_PANELS = "gene_panels"
-    GENOMIC_INFORMATION = "genomic_information"
-
     file_name_to_path = {
         "assay_information": genie_path / "assay_information.txt",
         "data_clinical_patient": genie_path / "data_clinical_patient.txt",
