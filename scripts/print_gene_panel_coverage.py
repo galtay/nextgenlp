@@ -6,7 +6,7 @@ from nextgenlp import genie
 from nextgenlp import genie_constants
 
 
-GENIE_VERSION = genie_constants.GENIE_12
+GENIE_VERSION = genie_constants.GENIE_13p1
 syn_file_paths = genie_constants.get_file_name_to_path(
     sync_path=config["Paths"]["synapse_path"],
     genie_version=GENIE_VERSION,

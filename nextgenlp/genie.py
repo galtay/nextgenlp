@@ -9,6 +9,7 @@ import pandas as pd
 
 
 class GenieData:
+
     def __init__(
         self,
         df_gp_wide: pd.DataFrame,
@@ -23,7 +24,7 @@ class GenieData:
 
         Args:
           df_gp_wide: (panels x genes) 1 if panel includes gene, otherwise 0
-          df_psm: merged patient, clinical, mutations data. one row per variant
+          df_psm: merged patient, sample, mutations data. one row per variant
           df_dcs: clinical sample data. one row per sample
           filters: dict indicating which filters have been applied
           df_cna: (samples x genes) discrete copy number alteration data
@@ -113,11 +114,11 @@ class GenieData:
     @classmethod
     def from_file_paths(
         cls,
-        gene_panels: str,
-        data_clinical_patient: str,
-        data_clinical_sample: str,
-        data_mutations_extended: str,
-        data_CNA: Optional[str] = None,
+        gene_panels: str | Path,
+        data_clinical_patient: str | Path,
+        data_clinical_sample: str | Path,
+        data_mutations_extended: str | Path,
+        data_CNA: Optional[str | Path] = None,
     ):
 
         """Create GenieData instance from GENIE file paths.
@@ -162,6 +163,30 @@ class GenieData:
             "extra": set(),
         }
         return cls(df_gp_wide, df_psm, df_dcs, filters, df_cna=df_cna)
+
+
+    @classmethod
+    def from_synapse_directory(
+        cls,
+        synapse_directory: str | Path,
+        read_cna: bool = False,
+    ):
+
+        """Create GenieData instance from GENIE dataset directory.
+
+        Args:
+          synapse_directory: e.g. /path/to/syn51355584
+
+        """
+        path = Path(synapse_directory)
+        return cls.from_file_paths(
+            gene_panels = path / "gene_panels",
+            data_clinical_patient = path / "data_clinical_patient.txt",
+            data_clinical_sample = path / "data_clinical_sample.txt",
+            data_mutations_extended = path / "data_mutations_extended.txt",
+            data_CNA = path / "data_CNA.txt" if read_cna else None,
+        )
+
 
     def subset_to_variants(self):
         """Return new GenieData with samples that dont have variants removed."""

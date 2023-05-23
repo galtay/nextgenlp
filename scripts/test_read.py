@@ -2,18 +2,18 @@
 Simple example of creating a GenieData object.
 Here the paths are set using the config and genie_constants modules.
 """
+from pathlib import Path
 from nextgenlp import genie
 from nextgenlp import genie_constants
 from nextgenlp.config import config
 
 
-GENIE_VERSION = genie_constants.GENIE_12
+GENIE_VERSION = genie_constants.GENIE_13p1
 USE_CNA = False
 
-
-syn_file_paths = genie_constants.get_file_name_to_path(
-    sync_path=config["Paths"]["synapse_path"],
-    genie_version=GENIE_VERSION,
+synapse_directory = (
+    Path(config["Paths"]["synapse_path"])
+    / genie_constants.DATASET_NAME_TO_SYNID[GENIE_VERSION]
 )
 
 keep_keys = [
@@ -25,5 +25,4 @@ keep_keys = [
 if USE_CNA:
     keep_keys.append("data_CNA")
 
-read_file_paths = {k:v for k,v in syn_file_paths.items() if k in keep_keys}
-gd = genie.GenieData.from_file_paths(**read_file_paths)
+gd = genie.GenieData.from_synapse_directory(synapse_directory, read_cna=USE_CNA)
