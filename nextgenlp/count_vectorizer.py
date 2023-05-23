@@ -125,7 +125,7 @@ class NextgenlpCountVectorizer(BaseEstimator, TransformerMixin):
 
         x_count = self.build_count_matrix(X, unigram_to_index)
         n_docs, n_unigrams = x_count.shape
-        doc_count = np.array(x_count.sum(axis=0)).squeeze()
+        doc_count = np.array((x_count>0).sum(axis=0)).squeeze()
         doc_freq = doc_count / n_docs
         weights = np.array([w for sentence in X for (u, w) in sentence])
         logger.info(f"fix on X with unigram weights {self.calc_stats(weights)}")

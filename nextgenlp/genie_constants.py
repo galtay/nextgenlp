@@ -3,26 +3,14 @@ from typing import Dict
 from loguru import logger
 
 
-GENIE_12 = "genie-12"
-GENIE_13 = "genie-13"
-VALID_GENIE_VERSIONS = [GENIE_12, GENIE_13]
+GENIE_12p1 = "genie-12p1"
+GENIE_13p1 = "genie-13p1"
+VALID_GENIE_VERSIONS = [GENIE_12p1, GENIE_13p1]
 
 DATASET_NAME_TO_SYNID = {
-    GENIE_12: "syn32309524",
-    GENIE_13: "syn36709873",
+    GENIE_12p1: "syn32309524",
+    GENIE_13p1: "syn51355584",
 }
-
-ASSAY_INFORMATION = "assay_information"
-DATA_CLINICAL_PATIENT = "data_clinical_patient"
-DATA_CLINICAL_SAMPLE = "data_clinical_sample"
-DATA_FUSIONS = "data_fusions"
-DATA_GENE_MATRIX = "data_gene_matrix"
-DATA_MUTATIONS_EXTENDED = "data_mutations_extended"
-DATA_CNA = "data_CNA"
-DATA_CNA_HG19_SEG = "data_cna_hg19"
-GENE_PANELS = "gene_panels"
-GENOMIC_INFORMATION = "genomic_information"
-
 
 PATHOLOGY_SCORES = ["Polyphen", "SIFT"]
 
@@ -172,54 +160,28 @@ def get_file_name_to_path(
     genie_path = Path(sync_path) / DATASET_NAME_TO_SYNID[genie_version]
     logger.info(f"genie_path={genie_path}")
 
-    if genie_version == GENIE_12:
-        file_name_to_path = {
-            ASSAY_INFORMATION: genie_path
-            / f"{ASSAY_INFORMATION}.txt",
-            DATA_CLINICAL_PATIENT: genie_path
-            / f"{DATA_CLINICAL_PATIENT}.txt",
-            DATA_CLINICAL_SAMPLE: genie_path
-            / f"{DATA_CLINICAL_SAMPLE}.txt",
-            DATA_FUSIONS: genie_path
-            / f"{DATA_FUSIONS}.txt",
-            DATA_GENE_MATRIX: genie_path
-            / f"{DATA_GENE_MATRIX}.txt",
-            DATA_MUTATIONS_EXTENDED: genie_path
-            / f"{DATA_MUTATIONS_EXTENDED}.txt",
-            DATA_CNA: genie_path / f"{DATA_CNA}.txt",
-            DATA_CNA_HG19_SEG: genie_path
-            / f"genie_{DATA_CNA_HG19_SEG}.seg",
-            GENE_PANELS: genie_path / GENE_PANELS,
-            GENOMIC_INFORMATION: genie_path
-            / f"{GENOMIC_INFORMATION}.txt",
-        }
+    ASSAY_INFORMATION = "assay_information"
+    DATA_CLINICAL_PATIENT = "data_clinical_patient"
+    DATA_CLINICAL_SAMPLE = "data_clinical_sample"
+    DATA_FUSIONS = "data_fusions"
+    DATA_GENE_MATRIX = "data_gene_matrix"
+    DATA_MUTATIONS_EXTENDED = "data_mutations_extended"
+    DATA_CNA = "data_CNA"
+    DATA_CNA_HG19_SEG = "data_cna_hg19"
+    GENE_PANELS = "gene_panels"
+    GENOMIC_INFORMATION = "genomic_information"
 
-    elif genie_version == GENIE_13:
-        file_name_to_path = {
-            ASSAY_INFORMATION: genie_path
-            / f"{ASSAY_INFORMATION}_13.3-consortium.txt",
-            DATA_CLINICAL_PATIENT: genie_path
-            / f"{DATA_CLINICAL_PATIENT}_13.3-consortium.txt",
-            DATA_CLINICAL_SAMPLE: genie_path
-            / f"{DATA_CLINICAL_SAMPLE}_13.3-consortium.txt",
-            DATA_FUSIONS: genie_path
-            / f"{DATA_FUSIONS}_13.3-consortium.txt",
-            DATA_GENE_MATRIX: genie_path
-            / f"{DATA_GENE_MATRIX}_13.3-consortium.txt",
-            DATA_MUTATIONS_EXTENDED: genie_path
-            / f"{DATA_MUTATIONS_EXTENDED}_13.3-consortium.txt",
-            DATA_CNA: genie_path
-            / f"{DATA_CNA}_13.3-consortium.txt",
-            DATA_CNA_HG19_SEG: genie_path
-            / f"genie_private_{DATA_CNA_HG19_SEG}_13.3-consortium.seg",
-            GENE_PANELS: genie_path / GENE_PANELS,
-            GENOMIC_INFORMATION: genie_path
-            / f"{GENOMIC_INFORMATION}_13.3-consortium.txt",
-        }
-
-    else:
-        raise ValueError(
-            f"genie version must be one of {VALID_GENIE_VERSIONS}"
-        )
+    file_name_to_path = {
+        "assay_information": genie_path / "assay_information.txt",
+        "data_clinical_patient": genie_path / "data_clinical_patient.txt",
+        "data_clinical_sample": genie_path / "data_clinical_sample.txt",
+        "data_fusions": genie_path / "data_fusions.txt",
+        "data_gene_matrix": genie_path / "data_gene_matrix.txt",
+        "data_mutations_extended": genie_path / "data_mutations_extended.txt",
+        "data_CNA": genie_path / "data_CNA.txt",
+        "data_cna_hg19": genie_path / f"genie_data_cna_hg19.seg",
+        "gene_panels": genie_path / "gene_panels",
+        "genomic_information": genie_path / "genomic_information.txt",
+    }
 
     return file_name_to_path

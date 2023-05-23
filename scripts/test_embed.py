@@ -26,7 +26,7 @@ USE_PATH_SCORES = True
 USE_VARIANTS = True
 USE_CNA = True
 RANDOM_STATE = 9237
-GENIE_VERSION = genie_constants.GENIE_12
+GENIE_VERSION = genie_constants.GENIE_13p1
 EMBEDDINGS_PATH = config['Paths']["embeddings_path"]
 
 
