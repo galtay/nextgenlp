@@ -51,13 +51,13 @@ this to whatever you want. Finally, add your personal access token to the `secre
 
 # Access to GENIE
 
-## GENIE 12
+## GENIE 12.1
 
 * https://www.synapse.org/#!Synapse:syn32309524
 
-## GENIE 13
+## GENIE 13.1
 
-* link when public
+* https://www.synapse.org/#!Synapse:syn51355584
 
 # Downloading from Synapse
 
@@ -65,7 +65,7 @@ Download datasets using their synids.
 
 ```python
 from nextgenlp.synapse import sync_datasets
-synids = ["syn32309524"]  # GENIE v12 dataset
+synids = ["syn51355584"]  # GENIE v13.1 dataset
 files = sync_datasets(synids)
 ```
 
