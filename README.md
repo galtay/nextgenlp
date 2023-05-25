@@ -78,22 +78,14 @@ metadata about the files that were just synced.
 
 # Getting Started
 
-Create a GENIE 12 dataset object
+Create a GENIE 13.1 dataset object
 
 ```python
-# you will have to update this
-syn_base_path = "/path/to/syn32309524"
+from nextgenlp.genie import GenieData
 
-gene_panels = os.path.join(syn_base_path, "gene_panels")
-data_clinical_patient = os.path.join(syn_base_path, "data_clinical_patient.txt")
-data_clinical_sample = os.path.join(syn_base_path, "data_clinical_sample.txt")
-data_mutations_extended = os.path.join(syn_base_path, "data_mutations_extended.txt")
-data_CNA = os.path.join(syn_base_path, "data_CNA.txt")
-gd = genie.GenieData.from_file_paths(
-    gene_panels,
-    data_clinical_patient,
-    data_clinical_sample,
-    data_mutations_extended,
-    data_CNA,
-)
+# you will have to update this path
+syn_base_path = "/path/to/syn51355584"
+
+# set read_cna=True to read copy number alteration data 
+gd = GenieData.from_synapse_directory(syn_base_path, read_cna=False)
 ```
