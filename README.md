@@ -51,13 +51,13 @@ this to whatever you want. Finally, add your personal access token to the `secre
 
 # Access to GENIE
 
-## GENIE 12
+## GENIE 12.1
 
 * https://www.synapse.org/#!Synapse:syn32309524
 
-## GENIE 13
+## GENIE 13.1
 
-* link when public
+* https://www.synapse.org/#!Synapse:syn51355584
 
 # Downloading from Synapse
 
@@ -65,7 +65,7 @@ Download datasets using their synids.
 
 ```python
 from nextgenlp.synapse import sync_datasets
-synids = ["syn32309524"]  # GENIE v12 dataset
+synids = ["syn51355584"]  # GENIE v13.1 dataset
 files = sync_datasets(synids)
 ```
 
@@ -78,22 +78,17 @@ metadata about the files that were just synced.
 
 # Getting Started
 
-Create a GENIE 12 dataset object
+Create a GENIE 13.1 dataset object
 
 ```python
-# you will have to update this
-syn_base_path = "/path/to/syn32309524"
+from nextgenlp.genie import GenieData
 
-gene_panels = os.path.join(syn_base_path, "gene_panels")
-data_clinical_patient = os.path.join(syn_base_path, "data_clinical_patient.txt")
-data_clinical_sample = os.path.join(syn_base_path, "data_clinical_sample.txt")
-data_mutations_extended = os.path.join(syn_base_path, "data_mutations_extended.txt")
-data_CNA = os.path.join(syn_base_path, "data_CNA.txt")
-gd = genie.GenieData.from_file_paths(
-    gene_panels,
-    data_clinical_patient,
-    data_clinical_sample,
-    data_mutations_extended,
-    data_CNA,
-)
+# you will have to update this path
+syn_base_path = "/path/to/syn51355584"
+
+# set read_cna=True to read copy number alteration data 
+gd = GenieData.from_synapse_directory(syn_base_path, read_cna=False)
+
+print(gd)
+GenieData(num_seq_assay_ids=104, num_seq_assay_genes=2218, num_psm_genes=1659, sample_rows=167358, variant_rows=1432052, filters={'seq_assay_ids': set(), 'path_score': set(), 'y_col': set(), 'extra': set()})
 ```
