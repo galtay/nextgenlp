@@ -2,6 +2,7 @@
 Run embedders and classifiers
 """
 import os
+from pathlib import Path
 
 from loguru import logger
 import numpy as np
@@ -30,22 +31,13 @@ GENIE_VERSION = genie_constants.GENIE_13p1
 EMBEDDINGS_PATH = config['Paths']["embeddings_path"]
 
 
-syn_file_paths = genie_constants.get_file_name_to_path(
-    sync_path=config["Paths"]["synapse_path"],
-    genie_version=GENIE_VERSION,
+synapse_directory = (
+    Path(config["Paths"]["synapse_path"])
+    / genie_constants.DATASET_NAME_TO_SYNID[GENIE_VERSION]
 )
-keep_keys = [
-    "gene_panels",
-    "data_clinical_patient",
-    "data_clinical_sample",
-    "data_mutations_extended",
-]
-if USE_CNA:
-    keep_keys += ["data_CNA"]
-read_file_paths = {k: v for k, v in syn_file_paths.items() if k in keep_keys}
 
 gds = {}
-gds["ALL"] = genie.GenieData.from_file_paths(**read_file_paths)
+gds["ALL"] = genie.GenieData.from_synapse_directory(synapse_directory, read_cna=USE_CNA)
 
 # create specific subset
 Y_PREDICT = "CANCER_TYPE"
@@ -88,7 +80,7 @@ for sent_key in sent_keys:
         gd = gd.subset_from_path_score("Polyphen")
 
     if "cna" in sent_key:
-        gd = gd.subset_to_cna()
+        gd = gd.subset_to_cna().subset_to_cna_altered()
 
     gd.make_sentences()
     df_train, df_test = train_test_split(
@@ -106,8 +98,8 @@ for sent_key in sent_keys:
     skipgram_weighter_post_shift = 0.0
 
     # update values as needed
-    if sent_key == "sent_gene_cna":
-        unigram_weighter_method = "abs"
+#    if sent_key == "sent_gene_cna":
+#        unigram_weighter_method = "abs"
 
     if "sift" in sent_key or "polyphen" in sent_key:
         unigram_weighter_post_shift = 1.0
@@ -285,6 +277,11 @@ for sent_key in sent_keys:
         df_meta.to_csv(
             os.path.join(out_path, f"{tag}_meta.tsv"),
             sep="\t",
+            index=False,
+        )
+
+        df_clf_reports[(sent_key, vec_type)].reset_index().rename(columns={"index": Y_PREDICT}).to_csv(
+            os.path.join(out_path, f"{tag}_clf_report.csv"),
             index=False,
         )
 

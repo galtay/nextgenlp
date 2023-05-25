@@ -9,20 +9,16 @@ from nextgenlp.config import config
 
 
 GENIE_VERSION = genie_constants.GENIE_13p1
-USE_CNA = False
+READ_CNA = True
 
 synapse_directory = (
     Path(config["Paths"]["synapse_path"])
     / genie_constants.DATASET_NAME_TO_SYNID[GENIE_VERSION]
 )
-
-keep_keys = [
-    "gene_panels",
-    "data_clinical_patient",
-    "data_clinical_sample",
-    "data_mutations_extended",
-]
-if USE_CNA:
-    keep_keys.append("data_CNA")
-
-gd = genie.GenieData.from_synapse_directory(synapse_directory, read_cna=USE_CNA)
+gd_all = genie.GenieData.from_synapse_directory(synapse_directory, read_cna=READ_CNA)
+gd = (
+    gd_all
+    .subset_from_seq_assay_ids(genie_constants.SEQ_ASSAY_ID_GROUPS["MSK"])
+    .subset_to_cna()
+    .subset_to_cna_altered()
+)

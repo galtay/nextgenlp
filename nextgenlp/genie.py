@@ -217,6 +217,37 @@ class GenieData:
             seq_assay_id_to_cna_genes=self.seq_assay_id_to_cna_genes,
         )
 
+    def subset_to_cna_altered(self):
+        """Return new GenieData with samples that dont have copy number alterations removed."""
+
+        logger.info(f"creating subset for samples with non-zero CNA alterations")
+        if self.df_cna is None:
+            raise ValueError("CNA data was not read so can not create subset")
+
+        df_cna = self.df_cna[(self.df_cna==0.0).sum(axis=1) < self.df_cna.shape[1]]
+        logger.info(
+            "dropped {} samples with no CNA alterations".format(
+                self.df_cna.shape[0] - df_cna.shape[0]
+            )
+        )
+
+        # update data clinical samples and patient/sample/mutations
+        df_dcs = self.df_dcs.loc[df_cna.index]
+        df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_cna.index)]
+
+        filters = deepcopy(self.filters)
+        filters["extra"].add("has_cna_alterations")
+
+        return GenieData(
+            self.df_gp_wide,
+            df_psm.copy(),
+            df_dcs.copy(),
+            filters,
+            df_cna=df_cna.copy(),
+            seq_assay_id_to_cna_genes=self.seq_assay_id_to_cna_genes,
+        )
+
+
     def subset_from_seq_assay_ids(self, seq_assay_ids):
         """Filter out samples not tested with seq_assay_ids."""
 
@@ -281,11 +312,17 @@ class GenieData:
         )
 
     def subset_to_cna(self):
-        """Return new GenieData with samples that dont have CNA data removed."""
+        """Return new GenieData with samples that dont have CNA data removed.
+
+        Note that this looks for samples that have ANY CNA data.
+        It will not remove samples that have measured CNA data of all zeros.
+        For that see, `subset_to_cna_altered`
+        """
         logger.info(f"creating subset for samples with discrete CNA data")
         if self.df_cna is None:
             raise ValueError("CNA data was not read so can not create subset")
 
+        # check intersection between data clinical sample and cna data
         sample_ids = set(self.df_dcs.index) & set(self.df_cna.index)
         if len(sample_ids) == 0:
             logger.warning(
@@ -294,7 +331,7 @@ class GenieData:
             df_cna = self.df_cna.loc[[], []]
         df_cna = self.df_cna.loc[list(sample_ids)]
 
-        # check genes that have full CNA coverage
+        # check genes that have full CNA coverage (i.e. no nulls)
         bmask = df_cna.isnull().sum(axis=0) == 0
         cna_genes = list(bmask.index[bmask])
         if len(cna_genes) == 0:
@@ -302,11 +339,12 @@ class GenieData:
             df_cna = self.df_cna.loc[[], []]
         df_cna = df_cna[cna_genes]
 
-        # check samples that have full CNA coverage
+        # check samples that have full CNA coverage (i.e. no nulls)
         bmask = df_cna.isnull().sum(axis=1) == 0
         cna_samples = list(bmask.index[bmask])
         df_cna = df_cna.loc[cna_samples]
 
+        # update data clinical samples and patient/sample/mutations
         df_dcs = self.df_dcs.loc[df_cna.index]
         df_psm = self.df_psm[self.df_psm["SAMPLE_ID"].isin(df_cna.index)]
 
