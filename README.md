@@ -88,4 +88,7 @@ syn_base_path = "/path/to/syn51355584"
 
 # set read_cna=True to read copy number alteration data 
 gd = GenieData.from_synapse_directory(syn_base_path, read_cna=False)
+
+print(gd)
+GenieData(num_seq_assay_ids=104, num_seq_assay_genes=2218, num_psm_genes=1659, sample_rows=167358, variant_rows=1432052, filters={'seq_assay_ids': set(), 'path_score': set(), 'y_col': set(), 'extra': set()})
 ```
